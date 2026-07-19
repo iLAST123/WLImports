@@ -173,14 +173,100 @@ export class KvTokenStore implements TokenStore {
   }
 }
 
+/** Cliente Redis mínimo do qual dependemos (get/set/quit). */
+export interface RedisLike {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<unknown>;
+  quit(): Promise<unknown>;
+}
+
+/** Cria o cliente a partir da connection string; injetável nos testes. */
+export type RedisFactory = (url: string) => Promise<RedisLike>;
+
+// Import dinâmico do ioredis: fora do bundle quando o Redis não é usado, e sem
+// abrir conexão no import do módulo. `rediss://` (TLS do Upstash) é tratado pela
+// própria connection string.
+const defaultRedisFactory: RedisFactory = async (url) => {
+  const mod = (await import("ioredis")) as unknown as {
+    default: new (url: string, opts?: unknown) => RedisLike;
+  };
+  const Redis = mod.default;
+  return new Redis(url, {
+    connectTimeout: 5_000,
+    maxRetriesPerRequest: 2,
+    // Serverless: não queremos retries infinitos segurando a lambda.
+    enableOfflineQueue: false,
+  });
+};
+
 /**
- * Escolhe o store conforme o ambiente: se há um par de envs de KV
- * (`UPSTASH_REDIS_REST_*` ou `KV_REST_API_*`), usa `KvTokenStore`; senão cai no
- * `FileTokenStore` (dev local intocado). Sem env de KV → zero regressão.
+ * Persiste os tokens no Redis via connection string (`REDIS_URL`), usando
+ * ioredis sobre TCP/TLS. É o store adequado ao ambiente serverless da Vercel
+ * quando a integração expõe só `REDIS_URL` (e não o par REST) — o
+ * `FileTokenStore` não sobrevive entre lambdas (DEC-002 do brain). Uma conexão
+ * curta por operação (get/set infrequentes: cold start + rotação). load/save
+ * NUNCA lançam — degradam para a semente de env / memória. Nunca logam segredo.
+ */
+export class RedisTokenStore implements TokenStore {
+  private readonly url: string;
+  private readonly makeClient: RedisFactory;
+
+  constructor(deps: { url?: string; makeClient?: RedisFactory } = {}) {
+    this.url = deps.url ?? process.env.REDIS_URL ?? "";
+    this.makeClient = deps.makeClient ?? defaultRedisFactory;
+  }
+
+  async load(): Promise<StoredTokens | null> {
+    let client: RedisLike | undefined;
+    try {
+      client = await this.makeClient(this.url);
+      const raw = await client.get(KV_TOKEN_KEY);
+      if (raw == null) return null; // chave ausente: normal, não é erro
+      return JSON.parse(raw) as StoredTokens;
+    } catch {
+      console.warn(
+        "[bling-auth] não foi possível ler tokens do Redis; seguindo sem cache do store",
+      );
+      return null;
+    } finally {
+      try {
+        await client?.quit();
+      } catch {
+        /* fecha silencioso */
+      }
+    }
+  }
+
+  async save(t: StoredTokens): Promise<void> {
+    let client: RedisLike | undefined;
+    try {
+      client = await this.makeClient(this.url);
+      await client.set(KV_TOKEN_KEY, JSON.stringify(t));
+    } catch {
+      console.warn(
+        "[bling-auth] não foi possível persistir tokens no Redis; seguindo só com memória",
+      );
+    } finally {
+      try {
+        await client?.quit();
+      } catch {
+        /* fecha silencioso */
+      }
+    }
+  }
+}
+
+/**
+ * Escolhe o store conforme o ambiente, em ordem de precedência:
+ * 1. `REDIS_URL` (connection string TCP/TLS) → `RedisTokenStore` — é o que a
+ *    integração de Redis da Vercel expõe neste projeto;
+ * 2. par REST (`UPSTASH_REDIS_REST_*` ou `KV_REST_API_*`) → `KvTokenStore`;
+ * 3. nada disso → `FileTokenStore` (dev local intocado). Sem env → zero regressão.
  */
 export function defaultTokenStore(
   env: Record<string, string | undefined> = process.env,
 ): TokenStore {
+  if (env.REDIS_URL?.trim()) return new RedisTokenStore({ url: env.REDIS_URL.trim() });
   const kv = resolveKvEnv(env);
   if (kv) return new KvTokenStore({ url: kv.url, token: kv.token });
   return new FileTokenStore();

@@ -1,5 +1,27 @@
 # Status — WLimports
 
+## 2026-07-19 — Missão 4: produção conectada + persistência via REDIS_URL
+
+Catálogo real (128 produtos) no ar em `https://wl-imports.vercel.app`. Duas
+descobertas na ativação, via Vercel CLI (o dono forneceu um token de acesso):
+1. **O "Redeploy" do painel e o auto-deploy do GitHub NÃO estavam criando
+   deploys que enxergassem as env vars novas** — o deploy servindo era anterior
+   ao `BLING_REFRESH_TOKEN`. `vercel deploy --prod` pela CLI resolveu na hora.
+2. **A integração de Redis da Vercel expõe só `REDIS_URL`** (connection string
+   TCP/TLS), e NÃO o par REST (`KV_REST_API_*`) que o `KvTokenStore` da missão 3
+   esperava. Sem store compatível, o token só vivia em memória (quebra ao
+   reciclar lambda).
+
+Correção: `RedisTokenStore` (ioredis sobre `REDIS_URL`, import dinâmico, conexão
+curta por operação, load/save nunca lançam). `defaultTokenStore()` agora escolhe
+por precedência: `REDIS_URL` → RedisTokenStore; par REST → KvTokenStore; senão
+FileTokenStore. Chave única `wlimports:bling:tokens` (mesma da missão 3).
+
+Gates: `tsc`, `lint` limpos, `test` 35 (7 novos), `build` OK. Dep nova: ioredis.
+Pendência: fazer um authorization_code fresco para semear um refresh token válido
+na env (o anterior foi consumido no 1º refresh de produção), então redeploy pela
+CLI. Depois: apagar o token de acesso da Vercel.
+
 ## 2026-07-19 — Missão 3: persistência de token em serverless (KV)
 
 Produção viva na Vercel (`https://wl-imports.vercel.app`, auto-deploy no push

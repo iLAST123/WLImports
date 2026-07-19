@@ -4,8 +4,10 @@ import {
   BlingAuthError,
   FileTokenStore,
   KvTokenStore,
+  RedisTokenStore,
   KV_TOKEN_KEY,
   defaultTokenStore,
+  type RedisLike,
   type StoredTokens,
   type TokenStore,
 } from "../bling-auth";
@@ -377,8 +379,104 @@ describe("KvTokenStore", () => {
   });
 });
 
+/** Cliente Redis fake com estado em memória. */
+function makeFakeRedis(initial: string | null = null) {
+  const state: { value: string | null; quits: number } = {
+    value: initial,
+    quits: 0,
+  };
+  const client: RedisLike = {
+    get: vi.fn(async (key: string) => {
+      void key;
+      return state.value;
+    }),
+    set: vi.fn(async (key: string, v: string) => {
+      void key;
+      state.value = v;
+      return "OK";
+    }),
+    quit: vi.fn(async () => {
+      state.quits += 1;
+      return "OK";
+    }),
+  };
+  return { client, state };
+}
+
+describe("RedisTokenStore", () => {
+  it("load: lê e desserializa o JSON da chave certa; fecha a conexão", async () => {
+    const t: StoredTokens = { accessToken: "AT", refreshToken: "R9", expiresAt: 5 };
+    const { client, state } = makeFakeRedis(JSON.stringify(t));
+    const store = new RedisTokenStore({
+      url: "rediss://x",
+      makeClient: async () => client,
+    });
+    expect(await store.load()).toEqual(t);
+    expect(client.get).toHaveBeenCalledWith(KV_TOKEN_KEY);
+    expect(state.quits).toBe(1);
+  });
+
+  it("load: chave ausente → null", async () => {
+    const { client } = makeFakeRedis(null);
+    const store = new RedisTokenStore({
+      url: "rediss://x",
+      makeClient: async () => client,
+    });
+    expect(await store.load()).toBeNull();
+  });
+
+  it("load: falha de conexão → null sem lançar, e fecha se possível", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const store = new RedisTokenStore({
+      url: "rediss://x",
+      makeClient: async () => {
+        throw new Error("connect ECONNREFUSED");
+      },
+    });
+    await expect(store.load()).resolves.toBeNull();
+  });
+
+  it("save: grava o JSON na chave certa e fecha a conexão", async () => {
+    const { client, state } = makeFakeRedis(null);
+    const store = new RedisTokenStore({
+      url: "rediss://x",
+      makeClient: async () => client,
+    });
+    const t: StoredTokens = { accessToken: "AT", refreshToken: "R2", expiresAt: 9 };
+    await store.save(t);
+    expect(client.set).toHaveBeenCalledWith(KV_TOKEN_KEY, JSON.stringify(t));
+    expect(state.value).toBe(JSON.stringify(t));
+    expect(state.quits).toBe(1);
+  });
+
+  it("save: erro → não lança", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const store = new RedisTokenStore({
+      url: "rediss://x",
+      makeClient: async () => {
+        throw new Error("down");
+      },
+    });
+    await expect(store.save({ refreshToken: "R" })).resolves.toBeUndefined();
+  });
+});
+
 describe("defaultTokenStore", () => {
-  it("UPSTASH_* completo → KvTokenStore", () => {
+  it("REDIS_URL presente → RedisTokenStore (precedência)", () => {
+    const store = defaultTokenStore({ REDIS_URL: "rediss://x" });
+    expect(store).toBeInstanceOf(RedisTokenStore);
+  });
+
+  it("REDIS_URL tem precedência sobre o par REST", () => {
+    const store = defaultTokenStore({
+      REDIS_URL: "rediss://x",
+      KV_REST_API_URL: "https://kv.example",
+      KV_REST_API_TOKEN: "t",
+    });
+    expect(store).toBeInstanceOf(RedisTokenStore);
+  });
+
+  it("UPSTASH_* completo (sem REDIS_URL) → KvTokenStore", () => {
     const store = defaultTokenStore({
       UPSTASH_REDIS_REST_URL: "https://kv.example",
       UPSTASH_REDIS_REST_TOKEN: "t",
@@ -394,7 +492,7 @@ describe("defaultTokenStore", () => {
     expect(store).toBeInstanceOf(KvTokenStore);
   });
 
-  it("sem envs de KV → FileTokenStore", () => {
+  it("sem envs de store → FileTokenStore", () => {
     const store = defaultTokenStore({});
     expect(store).toBeInstanceOf(FileTokenStore);
   });

@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# arquivo temporario de handoff do token para a Vercel (nunca versionar)
+token-vercel.txt
