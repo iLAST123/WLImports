@@ -1,5 +1,26 @@
 # Status — WLimports
 
+## 2026-07-19 — Missão 3: persistência de token em serverless (KV)
+
+Produção viva na Vercel (`https://wl-imports.vercel.app`, auto-deploy no push
+da main), conectada pelo dono. Implementado o `KvTokenStore`
+(`src/lib/bling-auth.ts`) via REST do Upstash Redis com `fetch` puro (sem SDK
+novo), resolvendo a limitação da DEC-002: o `FileTokenStore` não sobrevive
+entre lambdas. `defaultTokenStore()` escolhe o store por env — KV
+(`UPSTASH_REDIS_REST_*` ou `KV_REST_API_*`) em produção, `FileTokenStore` no
+dev local, e mock quando não há credencial nenhuma (zero regressão). Retry
+único pós-`invalid_grant` relê o store fresco antes do fallback, cobrindo a
+corrida multi-instância. Chave única no Redis: `wlimports:bling:tokens`.
+
+Gates verdes (rodados pelo main após o subagente parar por limite de cota):
+`tsc`, `lint`, `test` (28 Vitest, +10 vs missão 2), `build`.
+
+Pendências: dono precisa criar o Redis (Upstash) na aba Storage do projeto
+Vercel e adicionar `BLING_CLIENT_ID`/`BLING_CLIENT_SECRET`; seeding do refresh
+token para produção via env-seed (`BLING_REFRESH_TOKEN` = valor atual do
+`.bling-tokens.json`), que o KV assume após a 1ª rotação. Nota: a cadeia de
+refresh é única — quando produção assumir, o dev local cai para mock (aceito).
+
 ## 2026-07-19 — Missão 2 concluída
 
 Integração real com o Bling v3: OAuth 2.0 com refresh token rotativo e

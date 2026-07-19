@@ -79,6 +79,113 @@ export class FileTokenStore implements TokenStore {
   }
 }
 
+// Chave ÚNICA e fixa do token no Redis. Exportada porque o seeding manual em
+// produção (SET inicial do refresh token semente) precisa bater EXATAMENTE com
+// este nome. Nunca versionar/prefixar por ambiente aqui — um único registro.
+export const KV_TOKEN_KEY = "wlimports:bling:tokens";
+
+interface KvTokenStoreDeps {
+  url?: string;
+  token?: string;
+  fetchFn?: typeof fetch;
+}
+
+/**
+ * Resolve o par (url, token) do KV a partir das envs que a Vercel injeta.
+ * Precedência: `UPSTASH_REDIS_REST_*` primeiro, senão `KV_REST_API_*`. Só
+ * considera um par se AMBOS (url + token) estiverem presentes.
+ */
+function resolveKvEnv(
+  env: Record<string, string | undefined>,
+): { url: string; token: string } | null {
+  const upstashUrl = env.UPSTASH_REDIS_REST_URL?.trim();
+  const upstashToken = env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  if (upstashUrl && upstashToken) return { url: upstashUrl, token: upstashToken };
+
+  const kvUrl = env.KV_REST_API_URL?.trim();
+  const kvToken = env.KV_REST_API_TOKEN?.trim();
+  if (kvUrl && kvToken) return { url: kvUrl, token: kvToken };
+
+  return null;
+}
+
+/**
+ * Persiste os tokens no Upstash Redis via API REST (fetch puro — sem SDK).
+ * Necessário em serverless (Vercel): o `FileTokenStore` não sobrevive entre
+ * lambdas e a primeira rotação do refresh token se perderia (DEC-002 do brain).
+ *
+ * Contrato REST do Upstash:
+ *   GET  {url}/get/{key}  → `{"result": "<string>|null}`
+ *   POST {url}/set/{key}  (body = valor) → `{"result": "OK"}`
+ * Auth via header `Bearer {token}`. `cache: "no-store"` obrigatório — token de
+ * auth JAMAIS pode vir de cache do Next. Nunca logamos token/URL/segredo.
+ */
+export class KvTokenStore implements TokenStore {
+  private readonly url: string;
+  private readonly token: string;
+  private readonly fetchFn: typeof fetch;
+
+  constructor(deps: KvTokenStoreDeps = {}) {
+    const resolved = resolveKvEnv(process.env);
+    // Remove barra final para montar a URL de forma determinística.
+    this.url = (deps.url ?? resolved?.url ?? "").replace(/\/+$/, "");
+    this.token = deps.token ?? resolved?.token ?? "";
+    this.fetchFn = deps.fetchFn ?? fetch;
+  }
+
+  async load(): Promise<StoredTokens | null> {
+    try {
+      const res = await this.fetchFn(`${this.url}/get/${KV_TOKEN_KEY}`, {
+        headers: { Authorization: `Bearer ${this.token}` },
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { result?: string | null };
+      // Chave ausente/vazia: `result` vem null — cenário normal, não é erro.
+      if (json.result == null) return null;
+      return JSON.parse(json.result) as StoredTokens;
+    } catch {
+      // Genérico de propósito: nunca expor token/URL nos logs.
+      console.warn(
+        "[bling-auth] não foi possível ler tokens do KV; seguindo sem cache do store",
+      );
+      return null;
+    }
+  }
+
+  async save(t: StoredTokens): Promise<void> {
+    try {
+      const res = await this.fetchFn(`${this.url}/set/${KV_TOKEN_KEY}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.token}` },
+        // Sem TTL: o token vive até ser sobrescrito pela próxima rotação.
+        body: JSON.stringify(t),
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      // Mesma semântica do FileTokenStore: save NUNCA lança; seguimos só com
+      // o cache em memória. Log genérico, sem conteúdo de token.
+      console.warn(
+        "[bling-auth] não foi possível persistir tokens no KV; seguindo só com memória",
+      );
+    }
+  }
+}
+
+/**
+ * Escolhe o store conforme o ambiente: se há um par de envs de KV
+ * (`UPSTASH_REDIS_REST_*` ou `KV_REST_API_*`), usa `KvTokenStore`; senão cai no
+ * `FileTokenStore` (dev local intocado). Sem env de KV → zero regressão.
+ */
+export function defaultTokenStore(
+  env: Record<string, string | undefined> = process.env,
+): TokenStore {
+  const kv = resolveKvEnv(env);
+  if (kv) return new KvTokenStore({ url: kv.url, token: kv.token });
+  return new FileTokenStore();
+}
+
 /** Erro tipado de renovação — quem chama decide o fallback (ex.: mock). */
 export class BlingAuthError extends Error {
   readonly status?: number;
@@ -123,7 +230,7 @@ export class BlingAuth {
 
   constructor(deps: BlingAuthDeps = {}) {
     this.fetchFn = deps.fetchFn ?? fetch;
-    this.store = deps.store ?? new FileTokenStore();
+    this.store = deps.store ?? defaultTokenStore();
     this.now = deps.now ?? Date.now;
     this.env = deps.env ?? process.env;
   }
@@ -173,29 +280,24 @@ export class BlingAuth {
     return this.refreshing;
   }
 
-  private async refresh(): Promise<string> {
-    const id = this.env.BLING_CLIENT_ID?.trim();
-    const secret = this.env.BLING_CLIENT_SECRET?.trim();
-    if (!id || !secret) {
-      throw new BlingAuthError("credenciais do Bling ausentes (client id/secret)");
-    }
-
-    // Precedência: refresh token rotacionado no store > semente do env.
-    const refreshToken =
-      this.refreshToken?.trim() || this.env.BLING_REFRESH_TOKEN?.trim();
-    if (!refreshToken) throw new BlingAuthError("refresh token ausente");
-
-    // Credenciais vão no header Basic — NUNCA no body. Se enviadas no body, o
-    // Bling responde `invalid_client`.
+  /**
+   * POST único de renovação. Credenciais vão no header Basic — NUNCA no body
+   * (se enviadas no body, o Bling responde `invalid_client`). Falha de rede →
+   * BlingAuthError; nunca logamos token/credencial.
+   */
+  private async postToken(
+    id: string,
+    secret: string,
+    refreshToken: string,
+  ): Promise<Response> {
     const basic = Buffer.from(`${id}:${secret}`).toString("base64");
     const body = new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
     }).toString();
 
-    let res: Response;
     try {
-      res = await this.fetchFn(TOKEN_URL, {
+      return await this.fetchFn(TOKEN_URL, {
         method: "POST",
         headers: {
           Authorization: `Basic ${basic}`,
@@ -205,8 +307,42 @@ export class BlingAuth {
         body,
       });
     } catch {
-      // Nunca logamos token/credencial.
       throw new BlingAuthError("falha de rede ao renovar o token do Bling");
+    }
+  }
+
+  private async refresh(): Promise<string> {
+    const id = this.env.BLING_CLIENT_ID?.trim();
+    const secret = this.env.BLING_CLIENT_SECRET?.trim();
+    if (!id || !secret) {
+      throw new BlingAuthError("credenciais do Bling ausentes (client id/secret)");
+    }
+
+    // Precedência: refresh token rotacionado no store > semente do env.
+    let usedRefreshToken =
+      this.refreshToken?.trim() || this.env.BLING_REFRESH_TOKEN?.trim();
+    if (!usedRefreshToken) throw new BlingAuthError("refresh token ausente");
+
+    let res = await this.postToken(id, secret, usedRefreshToken);
+
+    // Retry único pós-`invalid_grant` (HTTP 400). Multi-instância: outra lambda
+    // pode ter rotacionado o refresh token no store enquanto este processo
+    // ainda usava um já defasado — o Bling então invalida o antigo. Relemos o
+    // store FRESCO (ignorando o cache `loaded`) e, se houver um refresh
+    // DIFERENTE do que falhou, tentamos UMA vez com ele.
+    //
+    // A janela de corrida residual (duas instâncias com o store igualmente
+    // defasado) é aceita de propósito: o fallback é o mock e a próxima
+    // renovação se recupera pelo store. O single-flight por processo segue
+    // intocado — o retry acontece dentro do mesmo POST compartilhado.
+    if (res.status === 400) {
+      const fresh = await this.store.load();
+      const freshToken = fresh?.refreshToken?.trim();
+      if (freshToken && freshToken !== usedRefreshToken) {
+        this.refreshToken = freshToken;
+        usedRefreshToken = freshToken;
+        res = await this.postToken(id, secret, freshToken);
+      }
     }
 
     if (!res.ok) {
@@ -231,7 +367,7 @@ export class BlingAuth {
     // reautorização manual (authorization code). Se a resposta não trouxer um
     // novo refresh_token (provedor pode não rotacionar), persistimos o que
     // acabou de ser usado — ele continua válido.
-    this.refreshToken = json.refresh_token ?? refreshToken;
+    this.refreshToken = json.refresh_token ?? usedRefreshToken;
 
     await this.store.save({
       accessToken: this.accessToken,

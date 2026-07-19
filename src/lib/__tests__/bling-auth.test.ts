@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import {
   BlingAuth,
   BlingAuthError,
+  FileTokenStore,
+  KvTokenStore,
+  KV_TOKEN_KEY,
+  defaultTokenStore,
   type StoredTokens,
   type TokenStore,
 } from "../bling-auth";
@@ -227,5 +231,171 @@ describe("BlingAuth", () => {
     await expect(auth.getAccessToken()).rejects.toBeInstanceOf(BlingAuthError);
     await expect(auth.getAccessToken()).resolves.toBe("AT2");
     expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("retry pós-invalid_grant: relê store, usa refresh fresco (≠) e persiste rotação", async () => {
+    const fetchFn = vi
+      .fn()
+      // 1º POST com o refresh defasado → 400 invalid_grant
+      .mockResolvedValueOnce(tokenRes({ error: "invalid_grant" }, 400))
+      // 2º POST com o refresh fresco relido do store → sucesso
+      .mockResolvedValueOnce(
+        tokenRes({ access_token: "AT2", expires_in: 21600, refresh_token: "R4" }),
+      );
+
+    // Store que "muda por baixo": carrega R1 no ensureLoaded e, depois que
+    // outra instância rotaciona, passa a devolver R2 na releitura fresca.
+    let loadValue: StoredTokens | null = { refreshToken: "R1" };
+    const saved: { t: StoredTokens | null } = { t: null };
+    const store: TokenStore = {
+      load: vi.fn(async () => loadValue),
+      save: vi.fn(async (t: StoredTokens) => {
+        saved.t = t;
+      }),
+    };
+    const auth = new BlingAuth({ fetchFn, store, env: ENV, now: () => 0 });
+
+    await auth.hasCredentials(); // força ensureLoaded → refreshToken = "R1"
+    loadValue = { refreshToken: "R2" }; // outra lambda rotacionou o store
+
+    const token = await auth.getAccessToken();
+    expect(token).toBe("AT2");
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    const body1 = new URLSearchParams(
+      (fetchFn.mock.calls[0][1] as RequestInit).body as string,
+    );
+    const body2 = new URLSearchParams(
+      (fetchFn.mock.calls[1][1] as RequestInit).body as string,
+    );
+    expect(body1.get("refresh_token")).toBe("R1");
+    expect(body2.get("refresh_token")).toBe("R2");
+    // rotação da resposta (R4) persistida
+    expect(saved.t?.refreshToken).toBe("R4");
+  });
+
+  it("retry pós-invalid_grant: store devolve o MESMO refresh → sem retry, lança", async () => {
+    const fetchFn = vi.fn(async () =>
+      tokenRes({ error: "invalid_grant" }, 400),
+    );
+    const { store } = makeStore({ refreshToken: "R1" }); // releitura = mesmo R1
+    const auth = new BlingAuth({ fetchFn, store, env: ENV, now: () => 0 });
+
+    await expect(auth.getAccessToken()).rejects.toBeInstanceOf(BlingAuthError);
+    expect(fetchFn).toHaveBeenCalledTimes(1); // nenhum retry
+  });
+});
+
+function kvRes(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  } as unknown as Response;
+}
+
+describe("KvTokenStore", () => {
+  it("load: GET na URL/header/cache exatos e parseia result", async () => {
+    const stored: StoredTokens = {
+      accessToken: "AT",
+      refreshToken: "R2",
+      expiresAt: 123,
+    };
+    const fetchFn = vi.fn(async () =>
+      kvRes({ result: JSON.stringify(stored) }),
+    );
+    const store = new KvTokenStore({
+      url: "https://kv.example",
+      token: "kv-token",
+      fetchFn,
+    });
+
+    const out = await store.load();
+    expect(out).toEqual(stored);
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`https://kv.example/get/${KV_TOKEN_KEY}`);
+    expect(url).toBe("https://kv.example/get/wlimports:bling:tokens");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer kv-token",
+    );
+    expect(init.cache).toBe("no-store");
+  });
+
+  it("load: result null → null (chave ausente, sem lançar)", async () => {
+    const fetchFn = vi.fn(async () => kvRes({ result: null }));
+    const store = new KvTokenStore({
+      url: "https://kv.example",
+      token: "t",
+      fetchFn,
+    });
+    expect(await store.load()).toBeNull();
+  });
+
+  it("load: erro de rede → null sem lançar", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchFn = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    const store = new KvTokenStore({
+      url: "https://kv.example",
+      token: "t",
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(await store.load()).toBeNull();
+  });
+
+  it("save: POST na URL/body/header corretos", async () => {
+    const fetchFn = vi.fn(async () => kvRes({ result: "OK" }));
+    const store = new KvTokenStore({
+      url: "https://kv.example",
+      token: "kv-token",
+      fetchFn,
+    });
+    const t: StoredTokens = { accessToken: "AT", refreshToken: "R2", expiresAt: 999 };
+    await store.save(t);
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`https://kv.example/set/${KV_TOKEN_KEY}`);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify(t));
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer kv-token",
+    );
+    expect(init.cache).toBe("no-store");
+  });
+
+  it("save: erro HTTP → não lança", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchFn = vi.fn(async () => kvRes({}, 500));
+    const store = new KvTokenStore({
+      url: "https://kv.example",
+      token: "t",
+      fetchFn,
+    });
+    await expect(store.save({ refreshToken: "R" })).resolves.toBeUndefined();
+  });
+});
+
+describe("defaultTokenStore", () => {
+  it("UPSTASH_* completo → KvTokenStore", () => {
+    const store = defaultTokenStore({
+      UPSTASH_REDIS_REST_URL: "https://kv.example",
+      UPSTASH_REDIS_REST_TOKEN: "t",
+    });
+    expect(store).toBeInstanceOf(KvTokenStore);
+  });
+
+  it("apenas KV_REST_API_* → KvTokenStore", () => {
+    const store = defaultTokenStore({
+      KV_REST_API_URL: "https://kv.example",
+      KV_REST_API_TOKEN: "t",
+    });
+    expect(store).toBeInstanceOf(KvTokenStore);
+  });
+
+  it("sem envs de KV → FileTokenStore", () => {
+    const store = defaultTokenStore({});
+    expect(store).toBeInstanceOf(FileTokenStore);
   });
 });
