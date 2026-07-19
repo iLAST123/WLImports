@@ -1,14 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import type { Produto } from "@/lib/types";
-
-const brl = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
 
 export default function ProductCard({ produto }: { produto: Produto }) {
   const inicial = produto.nome.trim().charAt(0).toUpperCase() || "W";
+
+  // A imagem vem de `/api/imagem` (proxy da URL assinada, que pode caducar).
+  // Se falhar, caímos no placeholder de inicial serif — nunca imagem quebrada.
+  const [erroImagem, setErroImagem] = useState(false);
+  const mostrarImagem = Boolean(produto.imagemURL) && !erroImagem;
 
   // Card não-interativo: sem tabIndex — não deve criar parada de tab para
   // teclado. Se um dia virar link para página de produto, promover o wrapper
@@ -17,12 +18,13 @@ export default function ProductCard({ produto }: { produto: Produto }) {
     <article className="group flex flex-col overflow-hidden rounded-sm border border-border bg-surface transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-gold/40">
       {/* Mídia */}
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-background">
-        {produto.imagemURL ? (
+        {mostrarImagem ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={produto.imagemURL}
             alt={produto.nome}
             loading="lazy"
+            onError={() => setErroImagem(true)}
             className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04]"
           />
         ) : (
@@ -53,9 +55,7 @@ export default function ProductCard({ produto }: { produto: Produto }) {
           </p>
         )}
         <p className="mt-4 font-sans text-base font-medium text-gold">
-          {typeof produto.preco === "number"
-            ? brl.format(produto.preco)
-            : "Sob consulta"}
+          {produto.precoFormatado ?? "Sob consulta"}
         </p>
       </div>
     </article>

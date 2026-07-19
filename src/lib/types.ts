@@ -5,6 +5,10 @@ export interface Produto {
   nome: string;
   descricaoCurta?: string;
   preco?: number;
+  /** Preço já formatado em BRL (pt-BR). Ausente quando `consultar` é true. */
+  precoFormatado?: string;
+  /** Produto sem preço cadastrado (tester/kit) → exibir "Sob consulta". */
+  consultar?: boolean;
   imagemURL?: string;
   categoria?: string;
 }
