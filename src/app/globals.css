@@ -40,8 +40,12 @@
   --font-sans: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
 }
 
-html {
-  scroll-behavior: smooth;
+/* Fallback nativo quando o Lenis está desligado — mas nunca sob
+   prefers-reduced-motion: quem pede menos movimento recebe salto instantâneo. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
@@ -63,4 +67,37 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/*
+ * Lenis (smooth scroll) — CSS recomendado.
+ * Quando o Lenis está ativo ele adiciona a classe `.lenis` no <html>; nesse
+ * caso o `scroll-behavior: smooth` nativo declarado acima entra em conflito e
+ * precisa virar `auto` (o Lenis controla o scroll). Quando o Lenis está
+ * desligado (prefers-reduced-motion), a classe não é aplicada e o
+ * `scroll-behavior: smooth` do html continua como fallback nativo.
+ */
+html.lenis {
+  scroll-behavior: auto;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
 }
