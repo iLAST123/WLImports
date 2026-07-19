@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import type { Produto, ProdutosResponse } from "@/lib/types";
 import ProductCard from "@/components/ProductCard";
@@ -26,16 +26,21 @@ export default function Catalog() {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState<string | null>(null);
 
+  // Guard de unmount compartilhado entre a carga inicial e o retry — nenhum
+  // setState depois que o componente sai da árvore.
+  const vivo = useRef(true);
+
   const carregar = async () => {
     setStatus("loading");
     try {
       const res = await fetch("/api/produtos");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as ProdutosResponse;
+      if (!vivo.current) return;
       setProdutos(data.produtos ?? []);
       setStatus("ready");
     } catch {
-      setStatus("error");
+      if (vivo.current) setStatus("error");
     }
   };
 
@@ -43,21 +48,21 @@ export default function Catalog() {
   // fetch — os setState acontecem depois do await (fora do corpo síncrono do
   // effect), evitando cascata de renders.
   useEffect(() => {
-    let cancelado = false;
+    vivo.current = true;
     (async () => {
       try {
         const res = await fetch("/api/produtos");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as ProdutosResponse;
-        if (cancelado) return;
+        if (!vivo.current) return;
         setProdutos(data.produtos ?? []);
         setStatus("ready");
       } catch {
-        if (!cancelado) setStatus("error");
+        if (vivo.current) setStatus("error");
       }
     })();
     return () => {
-      cancelado = true;
+      vivo.current = false;
     };
   }, []);
 

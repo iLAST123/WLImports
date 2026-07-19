@@ -34,13 +34,25 @@ function mockResponse(): ProdutosResponse {
 function normalizar(item: BlingProduto): Produto {
   return {
     id: item.id,
-    nome: item.nome,
+    nome: item.nome.trim(),
     descricaoCurta: item.descricaoCurta || undefined,
-    preco: typeof item.preco === "number" ? item.preco : undefined,
+    // Bling devolve `preco: 0` para produto sem preço cadastrado — tratamos
+    // como "sem preço" (o card exibe "Sob consulta"), nunca "R$ 0,00".
+    preco:
+      typeof item.preco === "number" && item.preco > 0 ? item.preco : undefined,
     imagemURL: item.imagemURL || undefined,
     // A listagem do Bling não traz categoria — mantém indefinido.
     categoria: undefined,
   };
+}
+
+/** Item utilizável: ativo e com nome válido (guard contra contrato frouxo). */
+function utilizavel(item: BlingProduto): boolean {
+  return (
+    item.situacao === "A" &&
+    typeof item.nome === "string" &&
+    item.nome.trim() !== ""
+  );
 }
 
 /**
@@ -76,9 +88,7 @@ export async function getProdutos(): Promise<ProdutosResponse> {
       const json = (await res.json()) as BlingListResponse;
       const itens = json.data ?? [];
 
-      acumulado.push(
-        ...itens.filter((i) => i.situacao === "A").map(normalizar)
-      );
+      acumulado.push(...itens.filter(utilizavel).map(normalizar));
 
       // última página quando vieram menos itens que o limite
       if (itens.length < PAGE_LIMIT) break;
