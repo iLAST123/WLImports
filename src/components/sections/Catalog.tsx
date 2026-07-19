@@ -186,7 +186,10 @@ export default function Catalog() {
                 variants={gridVariants}
                 initial="hidden"
                 whileInView="visible"
-                viewport={{ once: true, amount: 0.1 }}
+                // amount: 0 — o grid com o catálogo real (100+ itens) é mais
+                // alto que o viewport; qualquer fração exigida > 0 nunca é
+                // atingida e o reveal jamais dispararia.
+                viewport={{ once: true, amount: 0 }}
                 className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-3"
               >
                 <AnimatePresence mode="popLayout">

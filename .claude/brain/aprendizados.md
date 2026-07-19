@@ -53,3 +53,7 @@
 4. **`create-next-app` recusa diretório com maiúsculas** (por causa das regras
    de naming do `package.json`/npm). O scaffold precisou ser feito numa pasta
    em minúsculas e depois movido/renomeado para `WLImports`.
+
+## Framer Motion: `viewport.amount` > 0 em containers mais altos que o viewport nunca dispara (2026-07-19)
+
+O grid do catálogo usava `whileInView` com `viewport={{ amount: 0.1 }}` no container inteiro. Com o mock (12 itens) o grid era baixo e 10% dele cabia na tela — funcionava. Com o catálogo real (128 itens, ~24.000px de altura), 10% nunca cabe no viewport → o IntersectionObserver nunca dispara → todos os cards ficam presos em `opacity: 0` ("catálogo todo preto", reportado pelo dono). Fix: `amount: 0` no container de listas de altura variável; reservar `amount` fracionário para elementos menores que a tela. Regra: qualquer `whileInView` num elemento cuja altura depende de dados precisa funcionar no pior caso de altura.
