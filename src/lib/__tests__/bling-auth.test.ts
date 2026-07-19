@@ -196,4 +196,36 @@ describe("BlingAuth", () => {
     });
     await expect(auth.getAccessToken()).rejects.toBeInstanceOf(BlingAuthError);
   });
+
+  it("hasCredentials: false com id/secret mas SEM semente de refresh (nem env, nem store)", async () => {
+    const auth = new BlingAuth({
+      env: {
+        BLING_CLIENT_ID: "id",
+        BLING_CLIENT_SECRET: "secret",
+      },
+      store: makeStore().store,
+    });
+    expect(await auth.hasCredentials()).toBe(false);
+  });
+
+  it("single-flight se recupera após falha: a chamada seguinte re-tenta (promise rejeitada não fica grudada)", async () => {
+    const fetchFn = vi
+      .fn()
+      // 1ª tentativa: 500
+      .mockResolvedValueOnce(tokenRes({ error: "server" }, 500))
+      // 2ª tentativa: sucesso
+      .mockResolvedValueOnce(
+        tokenRes({ access_token: "AT2", expires_in: 21600, refresh_token: "R2" }),
+      );
+    const auth = new BlingAuth({
+      fetchFn: fetchFn as unknown as typeof fetch,
+      store: makeStore().store,
+      env: ENV,
+      now: () => 0,
+    });
+
+    await expect(auth.getAccessToken()).rejects.toBeInstanceOf(BlingAuthError);
+    await expect(auth.getAccessToken()).resolves.toBe("AT2");
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
 });
