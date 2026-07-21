@@ -1,5 +1,52 @@
 # Aprendizados — WLimports
 
+## `next dev`/`next build` local DISPARA OAuth real do Bling (2026-07-21)
+
+O `.env.local` tem `BLING_CLIENT_ID`/`SECRET` reais. `hasCredentials()` só exige
+id + secret + uma semente de refresh token — então **qualquer** `next dev` ou
+`next build` local que renderize a home vai tentar renovar o access token contra
+`https://www.bling.com.br/Api/v3/oauth/token`. Como o refresh token do Bling
+**rotaciona a cada uso** e a cadeia válida vive só no Redis de produção, isso é
+um caminho direto para derrubar a produção.
+
+Receita segura para rodar o app localmente (QA visual, Playwright):
+
+```bash
+BLING_CLIENT_ID="" BLING_CLIENT_SECRET="" BLING_REFRESH_TOKEN="" REDIS_URL="" npm run dev
+```
+
+Funciona porque o `@next/env` **não sobrescreve** variável já definida em
+`process.env` (mesmo vazia), e `hasCredentials()` faz `?.trim()` → string vazia
+é falsy → cai direto no mock, com zero request de rede ao Bling. Confirme com
+`curl -s localhost:3000/api/produtos | head -c 40` → tem que vir `"fonte":"mock"`.
+
+## ESLint do Next 16: `setState` dentro de `useEffect` é ERRO, não warning (2026-07-21)
+
+A regra `react-hooks/set-state-in-effect` (React Compiler) está como **erro** neste
+projeto. O padrão clássico de "já hidratei?" —
+`const [pronto, setPronto] = useState(false); useEffect(() => setPronto(true), [])`
+— **quebra o `npm run lint`**. Dois agentes caíram nisso na mesma missão.
+
+Substituto idiomático (já usado em `SmoothScroll.tsx`):
+`useSyncExternalStore(assinar, () => true, () => false)` — snapshot do servidor
+`false`, do cliente `true`. Resolve hidratação sem `setState` em effect e sem
+hydration mismatch. Para um flag mutável que não deve re-renderizar, `useRef`.
+
+## Scroll lock com Lenis: `body.overflow = "hidden"` NÃO basta (2026-07-21)
+
+Com o Lenis em modo `root`, ele escuta a roda no `window` e continua rolando a
+página mesmo com `overflow: hidden` no body — o drawer do carrinho "vazava"
+scroll para trás. Fix: `lenis.stop()` ao abrir + `lenis.start()` no cleanup, e
+`data-lenis-prevent` na área rolável do painel (senão o painel também não rola).
+
+## `backdrop-blur` cria containing block e prende filho `fixed` (2026-07-21)
+
+O `SiteHeader` usa `backdrop-blur`. Qualquer elemento `position: fixed`
+renderizado **dentro** do `<header>` passa a se posicionar em relação à faixa do
+header, não à viewport — o drawer do carrinho ficava preso na tira do topo. Por
+isso `SiteHeader` retorna `<><header/><CartDrawer/></>`, com o drawer FORA do
+`<header>`. Vale para qualquer `filter`/`backdrop-filter`/`transform` ancestral.
+
 ## Imagens do Bling: listagem = miniatura 70x70; original só no DETALHE (2026-07-21)
 
 O `imagemURL` da LISTAGEM (`GET /produtos`) é um JPEG 70x70 — sempre borra
