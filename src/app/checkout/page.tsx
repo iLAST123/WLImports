@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCarrinho } from "@/lib/carrinho";
+import SuperficieLoja from "@/components/loja/SuperficieLoja";
 import Stepper, { PASSOS } from "@/components/checkout/Stepper";
 import PassoIdentificacao from "@/components/checkout/PassoIdentificacao";
 import PassoEntrega, {
@@ -15,6 +16,7 @@ import PassoPagamento, {
   type ValorPagamento,
 } from "@/components/checkout/PassoPagamento";
 import ResumoPedido, {
+  rotularSubtotal,
   type ItemResumo,
 } from "@/components/checkout/ResumoPedido";
 import Confirmacao from "@/components/checkout/Confirmacao";
@@ -161,17 +163,17 @@ export default function CheckoutPage() {
   const cabecalho = (
     // pt-16/sm:pt-20 reserva a altura do SiteHeader, que é `fixed` e não ocupa
     // espaço no fluxo — sem isso esta faixa fica POR BAIXO do header global
-    // (wordmark e "Finalizar pedido" se sobrepondo).
-    <header className="border-b border-border pt-16 sm:pt-20">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-5">
-        <p className="font-sans text-xs uppercase tracking-[0.32em] text-muted">
-          Finalizar pedido
-        </p>
-        <p className="rounded-full border border-gold/30 px-3 py-1 font-sans text-[0.65rem] uppercase tracking-[0.18em] text-champagne">
+    // (wordmark e "Finalizar pedido" se sobrepondo). Regressão já cara uma vez.
+    <div className="border-b border-muted/30 pt-16 sm:pt-20">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+        <p className="font-sans text-xs text-muted">Finalizar pedido</p>
+        {/* Selo de simulação: `border-muted` + `text-foreground`, nunca um
+            contorno decorativo — precisa ser lido, não decorar. */}
+        <p className="rounded-full border border-muted px-3 py-1 font-sans text-xs text-foreground">
           Checkout demonstrativo
         </p>
       </div>
-    </header>
+    </div>
   );
 
   /* ---------------------------------------------------------------- */
@@ -179,19 +181,19 @@ export default function CheckoutPage() {
   /* ---------------------------------------------------------------- */
   if (!pronto) {
     return (
-      <main className="flex flex-1 flex-col">
+      <SuperficieLoja>
         {cabecalho}
         <div className="mx-auto w-full max-w-6xl px-6 py-16">
           <p className="sr-only" role="status">
             Carregando sua sacola.
           </p>
           <div aria-hidden="true" className="flex flex-col gap-4">
-            <div className="h-8 w-56 rounded-sm bg-surface" />
-            <div className="h-4 w-72 rounded-sm bg-surface/70" />
-            <div className="mt-6 h-64 w-full rounded-sm bg-surface/50" />
+            <div className="h-8 w-56 bg-surface" />
+            <div className="h-4 w-72 bg-surface" />
+            <div className="mt-6 h-64 w-full bg-surface" />
           </div>
         </div>
-      </main>
+      </SuperficieLoja>
     );
   }
 
@@ -201,9 +203,9 @@ export default function CheckoutPage() {
   /* ---------------------------------------------------------------- */
   if (pedido) {
     return (
-      <main className="flex flex-1 flex-col">
+      <SuperficieLoja>
         {cabecalho}
-        <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-24">
+        <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
           <Confirmacao
             numero={pedido.numero}
             itens={pedido.itens}
@@ -213,7 +215,7 @@ export default function CheckoutPage() {
             pagamento={pedido.pagamento}
           />
         </div>
-      </main>
+      </SuperficieLoja>
     );
   }
 
@@ -222,27 +224,25 @@ export default function CheckoutPage() {
   /* ---------------------------------------------------------------- */
   if (itens.length === 0) {
     return (
-      <main className="flex flex-1 flex-col">
+      <SuperficieLoja>
         {cabecalho}
         <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
-          <p className="font-sans text-xs uppercase tracking-[0.32em] text-gold">
-            Sacola vazia
-          </p>
-          <h1 className="mt-4 font-serif text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
+          <p className="font-sans text-xs text-gold">Sacola vazia</p>
+          <h1 className="mt-3 font-serif text-3xl font-normal leading-tight text-foreground">
             Ainda não há nada para finalizar.
           </h1>
-          <p className="mt-6 max-w-prose font-sans text-base leading-relaxed text-muted">
+          <p className="mt-4 max-w-prose font-sans text-sm leading-relaxed text-muted">
             Escolha uma fragrância da curadoria e ela aparece aqui — com preço
             ou como “sob consulta”, sempre sem surpresa.
           </p>
           <Link
             href="/#catalogo"
-            className="mt-10 inline-flex h-12 items-center justify-center rounded-sm border border-gold/50 px-8 font-sans text-sm uppercase tracking-[0.18em] text-champagne outline-none transition-colors duration-300 ease-lux hover:border-gold hover:text-gold focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="mt-8 inline-flex h-12 items-center justify-center rounded-none border border-muted px-8 font-sans text-sm text-foreground outline-none transition-colors duration-300 ease-lux hover:bg-surface focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Explorar a curadoria
           </Link>
         </div>
-      </main>
+      </SuperficieLoja>
     );
   }
 
@@ -258,49 +258,49 @@ export default function CheckoutPage() {
   );
 
   return (
-    <main className="flex flex-1 flex-col">
+    <SuperficieLoja>
       {cabecalho}
 
-      <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-16">
+      <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-10 sm:py-14 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-14">
         {/* Coluna do formulário */}
         <div className="min-w-0">
-          <h1 className="font-serif text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
+          <h1 className="font-serif text-3xl font-normal leading-tight text-foreground">
             Finalizar pedido
           </h1>
-          <p className="mt-3 max-w-prose font-sans text-sm leading-relaxed text-muted">
+          <p className="mt-3 max-w-prose font-sans text-sm leading-relaxed text-foreground">
             Este checkout é uma demonstração: nenhum pagamento é processado e
             nenhum dado seu é enviado ou salvo. Ao final, registramos o pedido e
             combinamos valores e pagamento no atendimento.
           </p>
 
-          <div className="mt-10">
+          <div className="mt-8">
             <Stepper atual={passo} />
           </div>
 
           {/* Resumo no mobile: colapsável nativo, acima do formulário */}
-          <details className="mt-8 rounded-sm border border-border bg-surface/60 lg:hidden">
-            <summary className="flex min-h-[44px] cursor-pointer items-center justify-between gap-4 px-5 py-3 font-sans text-sm text-champagne outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+          <details className="mt-6 border border-muted lg:hidden">
+            <summary className="flex min-h-[44px] cursor-pointer items-center justify-between gap-4 px-5 py-3 font-sans text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-inset">
               Ver resumo do pedido
-              <span className="font-sans text-xs uppercase tracking-[0.18em] text-muted">
-                {subtotalFormatado}
+              <span className="font-sans text-sm text-muted">
+                {rotularSubtotal(itens, subtotalFormatado)}
               </span>
             </summary>
-            <div className="p-2">{resumo}</div>
+            <div>{resumo}</div>
           </details>
 
-          <form onSubmit={aoEnviar} noValidate className="mt-10">
+          <form onSubmit={aoEnviar} noValidate className="mt-8">
             <h2
               ref={tituloPassoRef}
               tabIndex={-1}
-              className="font-serif text-2xl text-foreground outline-none"
+              className="font-serif text-2xl font-normal text-foreground outline-none"
             >
               {PASSOS[passo]}
             </h2>
-            <p className="mt-2 font-sans text-sm text-muted">
+            <p className="mt-1.5 font-sans text-sm text-muted">
               {DESCRICAO_PASSO[passo]}
             </p>
 
-            <div className="mt-8">
+            <div className="mt-7">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={passo}
@@ -335,19 +335,22 @@ export default function CheckoutPage() {
               </AnimatePresence>
             </div>
 
-            <div className="mt-10 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Botão vazado usa `border-muted` (não `border-border`): a moldura
+                é a única pista visual do controle. O primário é o "botão
+                escuro" da Aesop — bg-foreground/text-background, 12,96:1. */}
+            <div className="mt-9 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               {passo > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPasso((atual) => atual - 1)}
-                  className="inline-flex h-12 items-center justify-center rounded-sm border border-border px-6 font-sans text-sm uppercase tracking-[0.18em] text-muted outline-none transition-colors duration-300 ease-lux hover:border-gold/40 hover:text-champagne focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="inline-flex h-12 items-center justify-center rounded-none border border-muted px-6 font-sans text-sm text-foreground outline-none transition-colors duration-300 ease-lux hover:bg-surface focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   Voltar
                 </button>
               ) : (
                 <Link
                   href="/#catalogo"
-                  className="inline-flex h-12 items-center justify-center rounded-sm border border-border px-6 font-sans text-sm uppercase tracking-[0.18em] text-muted outline-none transition-colors duration-300 ease-lux hover:border-gold/40 hover:text-champagne focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="inline-flex h-12 items-center justify-center rounded-none border border-muted px-6 font-sans text-sm text-foreground outline-none transition-colors duration-300 ease-lux hover:bg-surface focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   Continuar comprando
                 </Link>
@@ -355,7 +358,7 @@ export default function CheckoutPage() {
 
               <button
                 type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-sm bg-gold px-8 font-sans text-sm uppercase tracking-[0.18em] text-background outline-none transition-colors duration-300 ease-lux hover:bg-champagne focus-visible:ring-2 focus-visible:ring-champagne focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="inline-flex h-12 items-center justify-center rounded-none bg-foreground px-8 font-sans text-sm text-background outline-none transition-colors duration-300 ease-lux hover:bg-gold focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 {passo === 2 ? "Registrar pedido" : "Continuar"}
               </button>
@@ -375,9 +378,11 @@ export default function CheckoutPage() {
           aria-label="Resumo do pedido"
           className="hidden min-w-0 lg:block"
         >
-          <div className="sticky top-8">{resumo}</div>
+          {/* top-24/sm:top-28 = altura do SiteHeader fixo + folga: sem isso o
+              resumo sticky encosta por baixo do header ao rolar. */}
+          <div className="sticky top-24 sm:top-28">{resumo}</div>
         </aside>
       </div>
-    </main>
+    </SuperficieLoja>
   );
 }

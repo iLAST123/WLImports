@@ -39,11 +39,14 @@ export default function PassoPagamento({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-sm border border-gold/30 bg-surface p-5">
-        <p className="font-sans text-xs uppercase tracking-[0.18em] text-gold">
+      {/* Aviso de simulação: `bg-surface` + `text-foreground` (12,96:1). Na
+          superfície clara ele NÃO pode virar cinza claro decorativo — é a
+          promessa de honestidade da DEC-004 §5 em texto. */}
+      <div className="border-l-2 border-gold bg-surface p-5">
+        <p className="font-sans text-xs font-medium text-gold">
           Checkout demonstrativo
         </p>
-        <p className="mt-2 max-w-prose font-sans text-sm leading-relaxed text-foreground/90">
+        <p className="mt-2 max-w-prose font-sans text-sm leading-relaxed text-foreground">
           Nenhum pagamento é processado aqui e nenhum dado é enviado para fora do
           seu navegador. Sua escolha abaixo serve só para sabermos como você
           prefere pagar — a cobrança é combinada com você no atendimento.
@@ -51,7 +54,7 @@ export default function PassoPagamento({
       </div>
 
       <fieldset className="min-w-0">
-        <legend className="mb-4 font-sans text-xs uppercase tracking-[0.18em] text-muted">
+        <legend className="mb-3 font-sans text-xs text-muted">
           Como você prefere pagar
         </legend>
         <div className="grid gap-3">

@@ -15,8 +15,26 @@ export interface ItemResumo {
   quantidade: number;
 }
 
-function ehSobConsulta(item: ItemResumo): boolean {
+function ehSobConsulta(
+  item: Pick<ItemResumo, "preco" | "consultar">
+): boolean {
   return item.consultar === true || typeof item.preco !== "number";
+}
+
+/**
+ * Rótulo do subtotal — camada de apresentação, sem tocar em `lib/carrinho`.
+ *
+ * `subtotalFormatado` vem de `formatarBRL(subtotal)`, e uma sacola composta
+ * SÓ de itens sob consulta soma 0 → a string seria "R$ 0,00", que este projeto
+ * proíbe em qualquer tela (DEC-004 §4: 0 significa "sem preço no ERP", nunca
+ * "grátis"). Neste caso o subtotal vira "A combinar".
+ */
+export function rotularSubtotal(
+  itens: readonly Pick<ItemResumo, "preco" | "consultar">[],
+  subtotalFormatado: string
+): string {
+  if (itens.length === 0) return subtotalFormatado;
+  return itens.every(ehSobConsulta) ? "A combinar" : subtotalFormatado;
 }
 
 function LinhaItem({ item }: { item: ItemResumo }) {
@@ -25,7 +43,9 @@ function LinhaItem({ item }: { item: ItemResumo }) {
 
   return (
     <li className="flex items-start gap-4 py-4">
-      <div className="relative h-16 w-14 shrink-0 overflow-hidden rounded-sm border border-border bg-background">
+      {/* Plate tingida atrás da foto, como na PLP da Aesop — a imagem não
+          flutua no creme, senta num retângulo um passo mais escuro. */}
+      <div className="relative h-16 w-14 shrink-0 overflow-hidden rounded-none bg-surface">
         {item.imagemURL ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -37,7 +57,7 @@ function LinhaItem({ item }: { item: ItemResumo }) {
         ) : (
           <span
             aria-hidden="true"
-            className="text-gold-gradient flex h-full w-full items-center justify-center font-serif text-2xl font-semibold opacity-80"
+            className="text-gold-gradient flex h-full w-full items-center justify-center font-serif text-2xl opacity-80"
           >
             {inicial}
           </span>
@@ -45,7 +65,7 @@ function LinhaItem({ item }: { item: ItemResumo }) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="font-serif text-sm leading-snug text-foreground">
+        <p className="font-sans text-sm font-medium leading-snug text-foreground">
           {item.nome}
         </p>
         <p className="mt-1 font-sans text-xs text-muted">
@@ -53,9 +73,10 @@ function LinhaItem({ item }: { item: ItemResumo }) {
         </p>
       </div>
 
+      {/* Regra de domínio: item sem preço no ERP nunca vira "R$ 0,00". */}
       <p
         className={`shrink-0 font-sans text-sm ${
-          sobConsulta ? "text-champagne" : "text-gold"
+          sobConsulta ? "text-muted" : "text-foreground"
         }`}
       >
         {sobConsulta ? "Sob consulta" : item.precoFormatado}
@@ -68,6 +89,10 @@ function LinhaItem({ item }: { item: ItemResumo }) {
  * Resumo do pedido — read-only. Quantidade e remoção acontecem na sacola;
  * aqui o foco é conferir. "Sob consulta" nunca vira R$ 0,00, e a UI diz em
  * texto que esses itens ficam de fora do subtotal.
+ *
+ * Superfície clara: o painel é `bg-surface` (creme tingido) sem borda e sem
+ * sombra — no creme a sombra dourada da marca vira sujeira, e a Aesop separa
+ * blocos por tinta, não por moldura.
  */
 export default function ResumoPedido({
   itens,
@@ -81,32 +106,35 @@ export default function ResumoPedido({
   titulo?: string;
 }) {
   const totalItens = itens.reduce((soma, i) => soma + i.quantidade, 0);
+  const subtotal = rotularSubtotal(itens, subtotalFormatado);
 
   return (
-    <div className="rounded-sm border border-border bg-surface p-6 shadow-lux sm:p-8">
-      <h2 className="font-serif text-xl text-foreground">{titulo}</h2>
-      <p className="mt-1 font-sans text-xs uppercase tracking-[0.18em] text-muted">
+    <div className="bg-surface p-6 sm:p-7">
+      <h2 className="font-serif text-2xl font-normal leading-tight text-foreground">
+        {titulo}
+      </h2>
+      <p className="mt-1 font-sans text-xs text-muted">
         {totalItens} {totalItens === 1 ? "item" : "itens"}
       </p>
 
-      <ul className="mt-6 divide-y divide-border border-y border-border">
+      <ul className="mt-5 divide-y divide-muted/30 border-y border-muted/30">
         {itens.map((item) => (
           <LinhaItem key={item.id} item={item} />
         ))}
       </ul>
 
-      <dl className="mt-6 space-y-3 font-sans text-sm">
+      <dl className="mt-5 space-y-2.5 font-sans text-sm">
         <div className="flex items-baseline justify-between gap-4">
           <dt className="text-muted">Subtotal</dt>
-          <dd className="text-foreground">{subtotalFormatado}</dd>
+          <dd className="text-foreground">{subtotal}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-4">
           <dt className="text-muted">Frete</dt>
-          <dd className="text-champagne">A combinar</dd>
+          <dd className="text-foreground">A combinar</dd>
         </div>
-        <div className="flex items-baseline justify-between gap-4 border-t border-border pt-3">
-          <dt className="font-serif text-base text-foreground">Total</dt>
-          <dd className="text-right font-serif text-base text-gold">
+        <div className="flex items-baseline justify-between gap-4 border-t border-muted/30 pt-3">
+          <dt className="font-medium text-foreground">Total</dt>
+          <dd className="text-right font-medium text-foreground">
             A confirmar
           </dd>
         </div>
@@ -114,13 +142,13 @@ export default function ResumoPedido({
 
       {temItemSobConsulta && (
         <p className="mt-4 font-sans text-xs leading-relaxed text-muted">
-          Itens marcados como <span className="text-champagne">Sob consulta</span>{" "}
-          não entram no subtotal — o valor é informado pelo nosso time no
-          atendimento.
+          Itens marcados como{" "}
+          <span className="text-foreground">Sob consulta</span> não entram no
+          subtotal — o valor é informado pelo nosso time no atendimento.
         </p>
       )}
 
-      <p className="mt-4 font-sans text-xs leading-relaxed text-muted">
+      <p className="mt-3 font-sans text-xs leading-relaxed text-muted">
         O total final, incluindo frete, é confirmado com você antes de qualquer
         cobrança.
       </p>

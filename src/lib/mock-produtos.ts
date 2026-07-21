@@ -15,6 +15,15 @@ export interface ProdutoMock extends Produto {
  * Catálogo de demonstração — perfumes e decants FICTÍCIOS.
  * Nenhuma marca real. Usado quando `BLING_ACCESS_TOKEN` está ausente ou a
  * API do Bling falha (fallback resiliente).
+ *
+ * Este mock é DELIBERADAMENTE desigual: `notas`/`destaque` existem só em
+ * alguns itens (os ids 5, 8 e 11 não têm nenhum dos dois) e nenhum item tem
+ * imagem. É assim de propósito — a vitrine precisa provar, em dev, que a
+ * AUSÊNCIA também fica bonita, porque é o estado normal do produto real do
+ * Bling. `notas` e `destaque` são exclusivos do mock; ver `types.ts`.
+ *
+ * O volume NÃO é campo aqui: ele já está dentro de `nome` e sai por
+ * `separarVolume()` (`produto-formato.ts`). Não duplicar.
  */
 export const mockProdutos: ProdutoMock[] = [
   {
@@ -25,6 +34,8 @@ export const mockProdutos: ProdutoMock[] = [
       "Uma composição oriental construída em torno do oud, com a resina abrindo densa e escura antes de assentar sobre rosa turca e âmbar.\n\nAs primeiras horas trazem açafrão e um toque cítrico que mantém o conjunto respirável; no fundo, madeiras e baunilha prolongam o rastro.\n\nProjeção alta e fixação de 8 a 12 horas na pele. Indicado para noite e para dias frios.",
     preco: 1299,
     categoria: "Unissex",
+    notas: "Oud, rosa turca, âmbar",
+    destaque: "Mais procurado",
     imagemURL: undefined,
   },
   {
@@ -35,6 +46,7 @@ export const mockProdutos: ProdutoMock[] = [
       "Vetiver do Haiti tratado em chave seca e mineral, com fumaça discreta e um couro que aparece já nos primeiros minutos.\n\nO decant de 10ml é envasado sob demanda a partir do frasco original, ideal para conhecer a fragrância antes de investir no tamanho cheio.\n\nProjeção moderada e fixação de 6 a 8 horas. Uso diário, do escritório ao fim de tarde.",
     preco: 119,
     categoria: "Decants",
+    notas: "Vetiver, couro, mineral",
     imagemURL: undefined,
   },
   {
@@ -45,6 +57,8 @@ export const mockProdutos: ProdutoMock[] = [
       "Um floral solar e salgado: flor de laranjeira e néroli sobre uma base salina que lembra pele depois do mar.\n\nA saída traz bergamota e uma pitada de pimenta rosa; o fundo, almíscar branco e um sândalo leve que arredonda o conjunto.\n\nProjeção média e fixação de 5 a 7 horas. Perfeito para primavera, verão e uso diurno.",
     preco: 899,
     categoria: "Feminino",
+    notas: "Flor de laranjeira, néroli, sal",
+    destaque: "Chegou agora",
     imagemURL: undefined,
   },
   {
@@ -55,6 +69,7 @@ export const mockProdutos: ProdutoMock[] = [
       "Couro em acabamento fumê, com açafrão e noz-moscada dando o calor especiado logo na abertura.\n\nO coração revela madeiras densas — cedro e gaiac — enquanto o fundo assenta em labdanum e um âmbar escuro, quase balsâmico.\n\nProjeção alta e fixação superior a 10 horas. Fragrância de inverno e de ocasiões noturnas.",
     preco: 1499,
     categoria: "Masculino",
+    notas: "Couro, açafrão, cedro",
     imagemURL: undefined,
   },
   {
@@ -75,6 +90,8 @@ export const mockProdutos: ProdutoMock[] = [
       "Âmbar dourado em dose generosa, com baunilha bourbon e benjoim construindo um fundo quente e envolvente.\n\nA abertura cítrica de mandarina evita o excesso de doçura e dá luz às primeiras horas; o fundo é resinoso e persistente.\n\nProjeção alta e fixação de 8 a 10 horas. Ideal para noites frias e para quem gosta de rastro marcante.",
     preco: 1049,
     categoria: "Unissex",
+    notas: "Âmbar, baunilha, benjoim",
+    destaque: "Mais procurado",
     imagemURL: undefined,
   },
   {
@@ -85,6 +102,7 @@ export const mockProdutos: ProdutoMock[] = [
       "Rosa em versão selvagem e nada açucarada: pimenta rosa na abertura, pétalas frescas no coração e patchouli no fundo.\n\nO contraste entre a especiaria e a terra do patchouli dá à fragrância um caráter contemporâneo, longe do floral clássico.\n\nProjeção média-alta e fixação de 6 a 9 horas. Uso versátil, dia ou noite.",
     preco: 799,
     categoria: "Feminino",
+    notas: "Rosa, pimenta rosa, patchouli",
     imagemURL: undefined,
   },
   {
@@ -105,6 +123,8 @@ export const mockProdutos: ProdutoMock[] = [
       "Folha de fumo doce, mel e especiarias sobre uma madeira envernizada — o efeito lembra tabacaria antiga e couro de poltrona.\n\nA doçura do mel é cortada por canela e cravo, mantendo a composição séria em vez de gourmand.\n\nProjeção alta e fixação de 9 a 12 horas. Outono e inverno, preferencialmente à noite.",
     preco: 1199,
     categoria: "Masculino",
+    notas: "Fumo, mel, especiarias",
+    destaque: "Formulação clássica",
     imagemURL: undefined,
   },
   {
@@ -115,6 +135,7 @@ export const mockProdutos: ProdutoMock[] = [
       "Íris aveludada em acabamento empoado, com violeta e um suede macio que dá a sensação de tecido sobre a pele.\n\nÉ um perfume silencioso e sofisticado, construído em camadas discretas em vez de contrastes.\n\nProjeção baixa a média e fixação de 6 a 8 horas. Elegante para o dia e para ambientes fechados.",
     preco: 1349,
     categoria: "Feminino",
+    notas: "Íris, violeta, suede",
     imagemURL: undefined,
   },
   {
@@ -135,6 +156,8 @@ export const mockProdutos: ProdutoMock[] = [
       "Almíscar quente com papiro seco e folhas de figueira, numa composição que evoca fim de tarde em clima mediterrâneo.\n\nA figueira traz um verde leitoso na abertura; o almíscar assume depois, colado à pele, com um fundo levemente amadeirado.\n\nProjeção baixa e fixação de 5 a 7 horas. Uso diário, em qualquer estação.",
     preco: 649,
     categoria: "Unissex",
+    notas: "Almíscar, papiro, figueira",
+    destaque: "Chegou agora",
     imagemURL: undefined,
   },
 ];

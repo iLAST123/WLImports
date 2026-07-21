@@ -52,6 +52,17 @@ interface RawProduto {
   situacao?: string;
   imagemURL?: string;
   categoria?: string;
+  /**
+   * Campos EDITORIAIS — existem só no mock (`src/lib/mock-produtos.ts`).
+   * A API do Bling não tem equivalente: a listagem devolve apenas
+   * `id, idProdutoPai, nome, codigo, preco, precoCusto, estoque, tipo,
+   * situacao, formato, descricaoCurta, imagemURL` (spec OpenAPI oficial —
+   * ver `.claude/brain/referencias-aesop.md` §9). Para produto real eles
+   * chegam sempre `undefined`, então o repasse em `tratar()` é seguro por
+   * construção. É PROIBIDO derivá-los ou inventá-los para produto do ERP.
+   */
+  notas?: string;
+  destaque?: string;
 }
 
 interface BlingListResponse {
@@ -97,6 +108,11 @@ function tratar(raw: RawProduto): Produto {
     consultar: precoValido ? undefined : true,
     imagemURL,
     categoria: raw.categoria,
+    // Repasse dos campos editoriais. Vindos do Bling são sempre `undefined`
+    // (a API não os tem), então o card/PDP simplesmente não renderiza as
+    // linhas correspondentes — é a degradação honesta em ação.
+    notas: raw.notas,
+    destaque: raw.destaque,
   };
 }
 

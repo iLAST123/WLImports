@@ -11,6 +11,38 @@ export interface Produto {
   consultar?: boolean;
   imagemURL?: string;
   categoria?: string;
+
+  // ─── Superfície editorial (§4/§9 de referencias-aesop.md) ────────────────
+  // Os três campos abaixo são OPCIONAIS e, no caminho real (Bling), quase
+  // sempre ausentes. Regra inegociável de degradação: **bloco sem dado não é
+  // renderizado** — sem título órfão, sem placeholder, sem "não disponível".
+  // O card degrada de `imagem · nome · notas · volume · preço · CTA` para
+  // `imagem · nome · preço · CTA` sem deixar buraco.
+
+  /**
+   * Tamanho declarado no próprio nome ("… 100ml"), extraído por
+   * `separarVolume()` de `produto-formato.ts`. Único campo rico que o dado
+   * real permite, porque não é invenção: é separação do que já existe.
+   * AUSENTE quando o nome não declara volume (ou quando a extração não teve
+   * confiança suficiente — ela é conservadora de propósito).
+   */
+  volume?: string;
+
+  /**
+   * Descritor olfativo curto, 2–4 palavras ("Oud, rosa turca, âmbar") —
+   * o equivalente ao "Yuzu, Vetiver Heart, Basil" da Aesop.
+   * SÓ O MOCK PREENCHE. O Bling não expõe notas olfativas em nenhum endpoint
+   * (`descricaoCurta` vem vazia em 100% da amostra), então produto real NUNCA
+   * terá este campo. É PROIBIDO derivar/inventar notas para produto real.
+   */
+  notas?: string;
+
+  /**
+   * Tag editorial curta ("Mais procurado", "Chegou agora") — o
+   * "Beloved formulation" da Aesop.
+   * SÓ O MOCK PREENCHE. Não existe no ERP; produto real NUNCA terá.
+   */
+  destaque?: string;
 }
 
 export interface ProdutosResponse {

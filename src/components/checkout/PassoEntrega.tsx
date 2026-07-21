@@ -122,10 +122,10 @@ export default function PassoEntrega({
       </div>
 
       <fieldset className="mt-2 min-w-0">
-        <legend className="mb-2 font-sans text-xs uppercase tracking-[0.18em] text-muted">
+        <legend className="mb-2 font-sans text-xs text-muted">
           Forma de envio
         </legend>
-        <p className="mb-4 max-w-prose font-sans text-sm leading-relaxed text-muted">
+        <p className="mb-3 max-w-prose font-sans text-sm leading-relaxed text-muted">
           As opções abaixo são estimativas: o valor do frete é combinado com você
           no atendimento, não calculado automaticamente aqui.
         </p>

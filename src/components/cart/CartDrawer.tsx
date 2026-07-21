@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useLenis } from "lenis/react";
 import { ehSobConsulta, useCarrinho, type ItemCarrinho } from "@/lib/carrinho";
+import { rotularSubtotal } from "@/components/checkout/ResumoPedido";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -20,7 +21,9 @@ function Thumb({ item }: { item: ItemCarrinho }) {
   const inicial = item.nome.trim().charAt(0).toUpperCase() || "W";
 
   return (
-    <div className="h-20 w-16 shrink-0 overflow-hidden rounded-sm border border-border bg-background">
+    // Plate tingida (bg-surface), sem moldura — é assim que a foto senta na
+    // PLP da Aesop: retângulo de tinta, não borda.
+    <div className="h-20 w-16 shrink-0 overflow-hidden bg-surface">
       {mostrar ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -33,9 +36,9 @@ function Thumb({ item }: { item: ItemCarrinho }) {
       ) : (
         <div
           aria-hidden="true"
-          className="flex h-full w-full items-center justify-center bg-gradient-to-br from-surface to-background"
+          className="flex h-full w-full items-center justify-center"
         >
-          <span className="text-gold-gradient select-none font-serif text-2xl font-semibold opacity-80">
+          <span className="text-gold-gradient select-none font-serif text-2xl opacity-80">
             {inicial}
           </span>
         </div>
@@ -49,25 +52,26 @@ function LinhaItem({ item }: { item: ItemCarrinho }) {
   const sobConsulta = ehSobConsulta(item);
 
   return (
-    <li className="flex gap-4 border-b border-border/70 py-5 first:pt-0">
+    <li className="flex gap-4 border-b border-muted/25 py-5 first:pt-0">
       <Thumb item={item} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <h3 className="truncate font-serif text-base leading-snug text-foreground">
+        <h3 className="truncate font-sans text-sm font-medium leading-snug text-foreground">
           {item.nome}
         </h3>
-        <p className="mt-1 font-sans text-sm text-gold">
+        {/* Regra de domínio: sem preço no ERP é "Sob consulta". Nunca R$ 0,00. */}
+        <p className="mt-1 font-sans text-sm text-muted">
           {sobConsulta ? "Sob consulta" : item.precoFormatado ?? "Sob consulta"}
         </p>
 
         <div className="mt-3 flex items-center justify-between gap-3">
-          {/* Stepper */}
-          <div className="flex items-center rounded-sm border border-border">
+          {/* Stepper — `border-muted`: a moldura é a única pista de controle. */}
+          <div className="flex items-center border border-muted">
             <button
               type="button"
               onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
               aria-label={`Diminuir quantidade de ${item.nome}`}
-              className="flex h-9 w-9 items-center justify-center font-sans text-base text-muted outline-none transition-colors hover:text-gold focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-inset"
+              className="flex h-9 w-9 items-center justify-center font-sans text-base text-foreground outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-inset"
             >
               &minus;
             </button>
@@ -81,7 +85,7 @@ function LinhaItem({ item }: { item: ItemCarrinho }) {
               type="button"
               onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
               aria-label={`Aumentar quantidade de ${item.nome}`}
-              className="flex h-9 w-9 items-center justify-center font-sans text-base text-muted outline-none transition-colors hover:text-gold focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-inset"
+              className="flex h-9 w-9 items-center justify-center font-sans text-base text-foreground outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-inset"
             >
               +
             </button>
@@ -91,7 +95,7 @@ function LinhaItem({ item }: { item: ItemCarrinho }) {
             type="button"
             onClick={() => remover(item.id)}
             aria-label={`Remover ${item.nome} da sacola`}
-            className="rounded-sm font-sans text-xs uppercase tracking-[0.14em] text-muted outline-none transition-colors hover:text-champagne focus-visible:ring-2 focus-visible:ring-gold"
+            className="font-sans text-xs text-muted underline underline-offset-4 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-gold"
           >
             Remover
           </button>
@@ -103,6 +107,29 @@ function LinhaItem({ item }: { item: ItemCarrinho }) {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Sacola.
+ *
+ * DECISÃO — o painel é SEMPRE claro (`data-superficie="clara"`), não acompanha
+ * a página. Três razões, em ordem de peso:
+ *
+ * 1. **Estrutural.** O drawer é irmão do `<header>` (fora dele por causa do
+ *    `backdrop-blur`, ver aprendizados), portanto vive no escopo raiz e NÃO
+ *    herda o `data-superficie` do `<main>` da página. Fazê-lo "acompanhar a
+ *    página" exigiria condicionar cor a rota/prop — exatamente o que o item 3
+ *    do contrato do globals.css proíbe, e o caminho mais curto para um dos dois
+ *    lados ficar ilegível sem ninguém perceber.
+ * 2. **Semântica da superfície.** O claro é a loja: catálogo, produto e
+ *    checkout. A sacola é o elo entre eles e desemboca no checkout — abrir uma
+ *    sacola creme sobre a home escura é a mesma "porta para a loja" que a
+ *    própria Aesop usa. Escuro é a marca; claro é onde se compra.
+ * 3. **Testabilidade.** Uma superfície só = um conjunto de pares de contraste
+ *    para verificar, e ele já está provado na tabela do globals.css.
+ *
+ * O scrim fica FORA do escopo claro de propósito: no escopo raiz
+ * `bg-background/80` é o preto quente, que escurece tanto a home escura quanto
+ * o catálogo creme — comportamento correto de modal nas duas.
+ */
 export default function CartDrawer() {
   const {
     itens,
@@ -187,6 +214,7 @@ export default function CartDrawer() {
 
           <motion.div
             ref={painelRef}
+            data-superficie="clara"
             role="dialog"
             aria-modal="true"
             aria-label="Sua sacola"
@@ -195,18 +223,18 @@ export default function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.45, ease: EASE }}
-            className="absolute right-0 top-0 flex h-full w-full max-w-full flex-col border-l border-gold/20 bg-surface shadow-2xl outline-none sm:w-[420px]"
+            className="absolute right-0 top-0 flex h-full w-full max-w-full flex-col bg-background text-foreground shadow-lux outline-none sm:w-[420px]"
           >
             {/* Cabeçalho */}
-            <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-5 sm:px-6">
-              <h2 className="font-serif text-xl tracking-wide text-foreground">
+            <div className="flex items-center justify-between gap-4 border-b border-muted/30 px-5 py-4 sm:px-6">
+              <h2 className="font-serif text-xl font-normal text-foreground">
                 Sua sacola
               </h2>
               <button
                 type="button"
                 onClick={fechar}
                 aria-label="Fechar carrinho"
-                className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full text-muted outline-none transition-colors hover:text-gold focus-visible:ring-2 focus-visible:ring-gold"
+                className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full text-foreground outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-gold"
               >
                 <svg
                   aria-hidden="true"
@@ -229,16 +257,16 @@ export default function CartDrawer() {
             >
               {itens.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-                  <p className="font-serif text-lg text-champagne">
+                  <p className="font-serif text-lg font-normal text-foreground">
                     Sua sacola ainda está vazia.
                   </p>
-                  <p className="mt-2 max-w-[26ch] font-sans text-sm leading-relaxed text-muted">
+                  <p className="mt-2 max-w-[28ch] font-sans text-sm leading-relaxed text-muted">
                     Os frascos que você escolher aparecem aqui.
                   </p>
                   <Link
                     href="/#catalogo"
                     onClick={fechar}
-                    className="mt-6 rounded-sm border-b border-gold/40 pb-1 font-sans text-xs uppercase tracking-[0.2em] text-gold outline-none transition-colors hover:text-champagne focus-visible:ring-2 focus-visible:ring-gold"
+                    className="mt-6 font-sans text-sm text-foreground underline underline-offset-4 outline-none transition-colors hover:text-gold focus-visible:ring-2 focus-visible:ring-gold"
                   >
                     Explorar a curadoria
                   </Link>
@@ -254,13 +282,13 @@ export default function CartDrawer() {
 
             {/* Rodapé */}
             {itens.length > 0 && (
-              <div className="border-t border-border px-5 py-5 sm:px-6">
+              <div className="border-t border-muted/30 px-5 py-5 sm:px-6">
                 <div className="flex items-baseline justify-between gap-4">
-                  <span className="font-sans text-xs uppercase tracking-[0.2em] text-muted">
-                    Subtotal
-                  </span>
-                  <span className="font-serif text-xl text-foreground">
-                    {subtotalFormatado}
+                  <span className="font-sans text-sm text-muted">Subtotal</span>
+                  {/* Sacola só com itens sob consulta somaria 0 → "A combinar",
+                      nunca "R$ 0,00". */}
+                  <span className="font-sans text-base font-medium text-foreground">
+                    {rotularSubtotal(itens, subtotalFormatado)}
                   </span>
                 </div>
 
@@ -271,15 +299,16 @@ export default function CartDrawer() {
                   </p>
                 )}
 
+                {/* Botão escuro da Aesop: bg-foreground/text-background (12,96:1). */}
                 <Link
                   href="/checkout"
                   onClick={fechar}
-                  className="mt-5 flex w-full items-center justify-center rounded-sm bg-gold px-6 py-3.5 font-sans text-xs font-semibold uppercase tracking-[0.2em] text-background outline-none transition-colors duration-300 hover:bg-champagne focus-visible:ring-2 focus-visible:ring-champagne focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                  className="mt-4 flex w-full items-center justify-center bg-foreground px-6 py-3.5 font-sans text-sm text-background outline-none transition-colors duration-300 hover:bg-gold focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   Finalizar compra
                 </Link>
 
-                <p className="mt-3 text-center font-sans text-[0.7rem] text-muted">
+                <p className="mt-3 text-center font-sans text-xs text-muted">
                   {totalItens} {totalItens === 1 ? "item" : "itens"} na sacola
                 </p>
               </div>

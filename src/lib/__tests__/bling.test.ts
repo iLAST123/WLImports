@@ -148,4 +148,35 @@ describe("getProdutos", () => {
     expect(r.fonte).toBe("mock");
     expect(r.produtos).toHaveLength(12);
   });
+
+  // ---- Campos editoriais (notas/destaque) ----
+  // Regra de produto: é PROIBIDO inventar nota olfativa ou tag editorial para
+  // produto real do ERP. O contrato precisa valer nos DOIS sentidos, então os
+  // dois sentidos são travados aqui.
+
+  it("mock: campos editoriais chegam à UI", async () => {
+    const r = await getProdutos({ auth: authSemCred });
+    expect(r.fonte).toBe("mock");
+    // Sem este repasse, o mock rico é achatado e o layout "cheio" da vitrine
+    // nunca aparece — todo card renderiza degradado.
+    expect(r.produtos.some((p) => p.notas)).toBe(true);
+    expect(r.produtos.some((p) => p.destaque)).toBe(true);
+    // E o mock é deliberadamente misto, para provar a degradação no dev.
+    expect(r.produtos.some((p) => !p.notas && !p.destaque)).toBe(true);
+  });
+
+  it("bling: produto real NUNCA ganha notas/destaque", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(pageRes(itens(3)))
+      .mockResolvedValueOnce(pageRes([]));
+
+    const r = await getProdutos({ auth: authComCred, fetchFn, sleep: noop });
+    expect(r.fonte).toBe("bling");
+    expect(r.produtos.length).toBeGreaterThan(0);
+    for (const p of r.produtos) {
+      expect(p.notas).toBeUndefined();
+      expect(p.destaque).toBeUndefined();
+    }
+  });
 });
