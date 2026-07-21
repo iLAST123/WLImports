@@ -1,5 +1,17 @@
 # Aprendizados — WLimports
 
+## `@next/swc-darwin-arm64` oco derruba o `next build` local (Turbopack/WASM) (2026-07-21)
+
+`node_modules/@next/swc-darwin-arm64` pode ficar **oco** — só `package.json`/
+`README`, sem o binário `.node` — provável instalação interrompida em algum
+`npm install` anterior. Sintoma: `next build` falha com "Turbopack is not
+supported on this platform (WASM bindings)" em vez de um erro claro de
+binário faltando. Fix: `rm -rf node_modules/@next/swc-darwin-arm64` + `npm
+install` (o `package-lock.json` restaura o pacote certo). Sintoma
+secundário: o build que crashou no meio deixa um lock fantasma ("Another
+next build process is already running") — resolver com `rm -rf .next` antes
+de rodar de novo.
+
 ## `next dev`/`next build` local DISPARA OAuth real do Bling (2026-07-21)
 
 O `.env.local` tem `BLING_CLIENT_ID`/`SECRET` reais. `hasCredentials()` só exige

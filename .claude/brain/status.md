@@ -1,5 +1,83 @@
 # Status — WLimports
 
+## 2026-07-21 — Missão 7: redesign "superfície clara" estilo Aesop + PLP dedicada
+
+Base: pesquisa de campo com computed styles reais da aesop.com
+(`.claude/brain/referencias-aesop.md`). Arquitetura e trade-offs em
+`decisoes/DEC-005`.
+
+**O que entrou:**
+- **Duas superfícies, mesmos tokens semânticos** (`src/app/globals.css`): os
+  valores mudam via `[data-superficie="clara"]` — creme `#FFFEF2` medido,
+  foreground `#33302B`, dourado vira **bronze `#7F6128`** por contraste AA,
+  token novo `--danger`. Contraste WCAG calculado par a par e documentado no
+  próprio CSS, com um contrato de 5 regras para quem escreve componente (só
+  token semântico, nunca hex cru, nunca condicional de cor no componente,
+  `data-superficie` sempre no ancestral, `border-muted` quando a borda é a
+  única pista).
+- **`src/components/loja/SuperficieLoja.tsx`**: casca clara única de
+  PLP/PDP/checkout. **Site híbrido por decisão editorial**: a home segue
+  escura (é a marca), a loja é clara (é a venda).
+- **PLP nova `/catalogo`** (`src/app/catalogo/page.tsx` +
+  `src/components/catalogo/`: CapaCatalogo, CatalogoCliente, GradeProdutos,
+  estados, ordenação, `useProdutos`): capa editorial escura, barra tingida
+  (busca, categorias derivadas do dado, ordenação, contagem `aria-live`),
+  grade 4/3/2. **Fetch único client-side** via `/api/produtos` — o mesmo da
+  home, **zero chamada nova ao Bling**. Ordenação por preço manda "Sob
+  consulta" sempre para o fim.
+- Home: `sections/Catalog.tsx` virou **prévia de 8 itens** + link "Ver
+  catálogo completo" → `/catalogo`, reusando os mesmos componentes de
+  `catalogo/` (hook e estados não duplicados).
+- `SiteHeader.tsx` bicromático: transparente→opaco ao rolar na home; opaco
+  claro via `data-superficie="clara"` nas demais rotas (sem condicional de
+  cor). Navegação persistente Início/Catálogo/Sobre com `aria-current`.
+- PDP: `Acordeao.tsx` acessível (`inert` no conteúdo fechado, animação
+  `grid-template-rows`, `motion-reduce`), renderiza **só seções com dado
+  real** (sem aba vazia); `preco.ts` centraliza a regra "Sob
+  consulta"/nunca "R$ 0,00" para servidor e client.
+- `src/lib/produto-formato.ts` + teste: `separarVolume()` conservador
+  (extrai "100ml" do fim do nome; falso negativo aceitável, nome mutilado
+  não; kits/conectores não casam).
+- Campos editoriais `volume`/`notas`/`destaque` em `types.ts`/`bling.ts`/
+  `mock-produtos.ts`: **só o mock preenche** `notas`/`destaque`; produto real
+  do Bling chega sempre `undefined` (seguro por construção) — regra da
+  **degradação honesta**: bloco sem dado não renderiza (sem placeholder, sem
+  título órfão).
+
+Gates: `tsc` limpo, `lint` limpo, `test` **97/97** (eram 78, +19 de
+`produto-formato`), `build` OK (rotas `/`, `/catalogo`, `/checkout`,
+`/produto/[id]`). Auto-revisão do orquestrador: zero bloqueio; varredura de
+contrato de cor: zero violação.
+
+**Deploy (2026-07-21 15:43 BRT):** `vercel deploy --prod` foi bloqueado pela
+permissão da sessão, mas o **auto-deploy do GitHub** (está conectado, ao
+contrário do que a experiência da missão 4 sugeria) construiu o commit
+`828a8b6` e publicou: deployment `dpl_6pCPduRX6nBSacA7KkcJwxs5JYsX`, status
+Ready, alias `https://wl-imports.vercel.app`. A ressalva da missão 4 (deploy
+via CLI) segue válida **quando há env var nova**; esta missão não mudou
+nenhuma.
+
+**Smoke pós-deploy em produção** (via curl): `/`, `/catalogo`, `/checkout` →
+200 · `/api/produtos` → `fonte:"bling"` (dados reais, 1º item "KIT BODY
+BUTTERLLY" R$ 260,00) · `/produto/16678961877` → 200 · detalhe real com
+galeria `["/api/imagem?id=16678961877&i=0"]` · `/api/imagem` → 200
+image/jpeg 185KB (imagem original, não miniatura). **Achado relevante**:
+nenhum dos 60 primeiros produtos reais tem `descricao` no detalhe — o dono
+não preenche `descricaoComplementar` no ERP; a PDP degrada honesta (sem
+acordeão). O caminho HTML→texto puro segue não exercitado com dado real por
+ausência de dado, não por falha.
+
+### O que o dono ainda valida em produção
+1. Visual das três superfícies (escura/clara/bicromática) em telas reais
+   (não só no gate automatizado).
+2. A cortina de 1ª visita continua se comportando bem sobre o novo header
+   bicromático.
+3. UX do `/catalogo` navegando os 128 produtos reais (busca, ordenação,
+   categorias derivadas, grade em mobile/tablet).
+4. Descrição real na PDP só aparecerá quando o dono preencher
+   `descricaoComplementar` no ERP do Bling — hoje a página degrada
+   corretamente (sem acordeão), mas o caminho nunca foi visto com dado.
+
 ## 2026-07-21 — Missão 6: de catálogo a E-COMMERCE (PDP + carrinho + checkout)
 
 O site deixou de ser uma home única e virou uma loja navegável. Arquitetura e
