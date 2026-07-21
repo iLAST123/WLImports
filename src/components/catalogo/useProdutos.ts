@@ -27,16 +27,31 @@ async function buscarProdutos(): Promise<Produto[]> {
  * `react-hooks/set-state-in-effect` é ERRO neste projeto e pega até chamada
  * indireta (um `useCallback` que contém setState, invocado no corpo do
  * effect). Por isso o `setState` só acontece dentro da IIFE, depois do await.
+ *
+ * `dadosIniciais` (F1): quando a PLP é server-rendered, o servidor já resolveu
+ * `getProdutos()` e passa a lista pronta — o hook inicia em `ready` e PULA o
+ * fetch de montagem (zero flash de "Carregando…", zero chamada redundante). O
+ * retry manual do estado de erro continua disponível para interações. A home
+ * segue chamando `useProdutos()` sem argumento (fetch client, inalterado).
  */
-export function useProdutos() {
-  const [status, setStatus] = useState<StatusCatalogo>("loading");
-  const [produtos, setProdutos] = useState<Produto[]>([]);
+export function useProdutos(dadosIniciais?: Produto[]) {
+  const temIniciais = dadosIniciais !== undefined;
+  const [status, setStatus] = useState<StatusCatalogo>(
+    temIniciais ? "ready" : "loading",
+  );
+  const [produtos, setProdutos] = useState<Produto[]>(dadosIniciais ?? []);
 
   // Guard de unmount compartilhado entre a carga inicial e o retry.
   const vivo = useRef(true);
 
   useEffect(() => {
     vivo.current = true;
+    // Server já entregou os dados: nada a buscar na montagem.
+    if (temIniciais) {
+      return () => {
+        vivo.current = false;
+      };
+    }
     (async () => {
       try {
         const lista = await buscarProdutos();
@@ -50,7 +65,7 @@ export function useProdutos() {
     return () => {
       vivo.current = false;
     };
-  }, []);
+  }, [temIniciais]);
 
   /** Retry manual do estado de erro — handler de evento, nunca effect. */
   const recarregar = useCallback(() => {

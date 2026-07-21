@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
+import { getProdutos } from "@/lib/bling";
 import Footer from "@/components/sections/Footer";
 import SuperficieLoja from "@/components/loja/SuperficieLoja";
 import CapaCatalogo from "@/components/catalogo/CapaCatalogo";
@@ -22,10 +24,17 @@ export const metadata: Metadata = {
  *   4. grade densa: 4 colunas em desktop, 3 em tablet, 2 em mobile
  *   [rodapé escuro, FORA da superfície clara — fecha a página no preto da marca]
  *
- * A página é estática: o catálogo é buscado UMA vez no cliente, pelo mesmo
- * `/api/produtos` que a home já usa. Nenhuma chamada nova ao Bling.
+ * A página é SERVER-RENDERED (F1): `getProdutos()` roda no servidor e a lista
+ * já sai no HTML do primeiro paint — mata o "Carregando catálogo…" e é
+ * indexável. `connection()` força render DINÂMICA por request (idioma do Next
+ * 16 que substitui `unstable_noStore`/`force-dynamic`); sem ele, um build com
+ * env vazias congelaria o mock no HTML de produção. O custo por request é só o
+ * Data Cache 600s de `getProdutos()` — ZERO chamada nova ao Bling.
  */
-export default function PaginaCatalogo() {
+export default async function PaginaCatalogo() {
+  await connection();
+  const { produtos } = await getProdutos();
+
   return (
     <>
       <SuperficieLoja className="pt-16 sm:pt-20">
@@ -52,7 +61,7 @@ export default function PaginaCatalogo() {
           </nav>
         </div>
 
-        <CatalogoCliente />
+        <CatalogoCliente dadosIniciais={produtos} />
       </SuperficieLoja>
 
       {/*

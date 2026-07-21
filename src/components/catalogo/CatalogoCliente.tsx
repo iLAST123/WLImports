@@ -17,6 +17,7 @@ import {
   GradeEsqueleto,
 } from "@/components/catalogo/estados";
 import { useProdutos } from "@/components/catalogo/useProdutos";
+import type { Produto } from "@/lib/types";
 
 const GRADE = "md:grid-cols-3 lg:grid-cols-4";
 
@@ -25,9 +26,16 @@ const GRADE = "md:grid-cols-3 lg:grid-cols-4";
  *
  * Tudo (busca, categoria, ordenação, contagem) opera em memória sobre o
  * payload já carregado pelo `useProdutos` — nenhuma chamada nova ao Bling.
+ *
+ * `dadosIniciais` vem do Server Component da PLP (F1): a grade já chega
+ * hidratada, sem flash de "Carregando…" e sem fetch de montagem.
  */
-export default function CatalogoCliente() {
-  const { status, produtos, recarregar } = useProdutos();
+export default function CatalogoCliente({
+  dadosIniciais,
+}: {
+  dadosIniciais?: Produto[];
+}) {
+  const { status, produtos, recarregar } = useProdutos(dadosIniciais);
 
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState<string | null>(null);
