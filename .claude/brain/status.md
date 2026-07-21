@@ -1,5 +1,20 @@
 # Status — WLimports
 
+## 2026-07-21 — Missão 5: fotos nítidas (imagem original via detalhe lazy)
+
+Dono reportou cards borrados: a listagem do Bling só entrega `imagemURL` 70x70
+(miniatura). Implementado `getImagemProduto` (`src/lib/bling.ts`): o proxy
+`/api/imagem` agora resolve a imagem ORIGINAL pelo detalhe
+(`GET /produtos/{id}` → `midia.imagens.internas[].link`, contrato confirmado
+na spec OpenAPI oficial), lazy por produto, cache em 2 camadas (Data Cache
+600s + Map com TTL e cache negativo 60s), fila serial 350ms com teto de 8, e
+fallback para a miniatura em qualquer falha (card nunca quebra). Hardening:
+Content-Type whitelist imagem + nosniff. Detalhes: `decisoes/DEC-003`.
+
+Gates: `tsc`, `lint` limpos, `test` 47 (12 novos), `build` OK. QA aprovado
+(matriz completa; ressalvas registradas na DEC-003). Commit na main + push.
+**Deploy NÃO feito — o dono publica e valida em produção.**
+
 ## 2026-07-19 — Missão 4: produção conectada + persistência via REDIS_URL
 
 Catálogo real (128 produtos) no ar em `https://wl-imports.vercel.app`. Duas

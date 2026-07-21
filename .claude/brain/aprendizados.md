@@ -1,5 +1,18 @@
 # Aprendizados — WLimports
 
+## Imagens do Bling: listagem = miniatura 70x70; original só no DETALHE (2026-07-21)
+
+O `imagemURL` da LISTAGEM (`GET /produtos`) é um JPEG 70x70 — sempre borra
+ampliado. A imagem original vem do DETALHE: `GET /produtos/{id}` →
+`data.midia.imagens.internas[].link` (campo separado de `linkMiniatura`, ambos
+obrigatórios no schema `ProdutosImagemInternaDTO`). Fonte de verdade acessível
+por script: a spec OpenAPI que renderiza a referência oficial vive em
+`https://developer.bling.com.br/build/assets/openapi-*.json` (o nome do asset
+muda por build — descobrir via o JS `SwaggerConfig-*` da página). Atenção: o
+client tipado `AlexandreBellas/bling-erp-api-js` está DEFASADO neste ponto
+(internas sem `link`) — em divergência, a spec oficial vence. O `imagemURL` do
+próprio detalhe não tem garantia de tamanho (pode ser a miniatura).
+
 ## 2026-07-19 (missão 2 — OAuth Bling)
 
 1. **Endpoint OAuth do Bling exige `www`.** `https://bling.com.br/...`
