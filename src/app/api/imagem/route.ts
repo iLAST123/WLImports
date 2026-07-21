@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getImagemOriginal } from "@/lib/bling";
+import { getImagemProduto, invalidarImagemGrande } from "@/lib/bling";
 
 // Rota dinâmica (usa searchParams) — o cache fica no `Cache-Control` da
 // resposta, não em revalidate de rota.
@@ -7,9 +7,15 @@ import { getImagemOriginal } from "@/lib/bling";
 // Proxy de imagem: `GET /api/imagem?id=123`.
 //
 // Design SSRF-safe: o client passa SOMENTE o id numérico. NUNCA aceitamos uma
-// URL arbitrária por query — a URL assinada da AWS é resolvida no servidor a
-// partir do catálogo já buscado. Sem isso, o proxy viraria um open relay que
-// buscaria qualquer host que o cliente pedisse.
+// URL arbitrária por query — as URLs assinadas da AWS são resolvidas no
+// servidor (listagem cacheada + detalhe lazy do produto). Sem isso, o proxy
+// viraria um open relay que buscaria qualquer host que o cliente pedisse.
+//
+// Qualidade: tenta primeiro a imagem em tamanho ORIGINAL (detalhe do produto);
+// se indisponível ou se o upstream falhar (ex.: assinatura expirada), cai para
+// a miniatura 70x70 da listagem — o card nunca fica sem foto por causa do
+// proxy. O fallback sai com `max-age` curto para o browser re-tentar logo e
+// trocar pela versão nítida.
 export async function GET(req: NextRequest) {
   const idParam = req.nextUrl.searchParams.get("id");
   const id = Number(idParam);
@@ -17,21 +23,50 @@ export async function GET(req: NextRequest) {
     return new Response("id inválido", { status: 400 });
   }
 
-  const url = await getImagemOriginal(id);
-  if (!url) return new Response("imagem não encontrada", { status: 404 });
+  const { grande, miniatura } = await getImagemProduto(id);
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(url);
-  } catch {
-    return new Response("falha ao buscar imagem", { status: 502 });
+  const candidatas: { url: string; origem: "detalhe" | "listagem" }[] = [];
+  if (grande) candidatas.push({ url: grande, origem: "detalhe" });
+  if (miniatura) candidatas.push({ url: miniatura, origem: "listagem" });
+  if (candidatas.length === 0) {
+    return new Response("imagem não encontrada", { status: 404 });
   }
-  if (!upstream.ok) return new Response("imagem indisponível", { status: 404 });
 
-  return new Response(upstream.body, {
-    headers: {
-      "Content-Type": upstream.headers.get("content-type") ?? "image/jpeg",
-      "Cache-Control": "public, max-age=300",
-    },
-  });
+  for (const candidata of candidatas) {
+    let upstream: Response;
+    try {
+      upstream = await fetch(candidata.url);
+    } catch {
+      if (candidata.origem === "detalhe") invalidarImagemGrande(id);
+      continue;
+    }
+    if (!upstream.ok) {
+      if (candidata.origem === "detalhe") invalidarImagemGrande(id);
+      continue;
+    }
+
+    // Hardening: as imagens "externas" do detalhe são URLs arbitrárias
+    // cadastradas no ERP. Nunca repassamos um Content-Type não-imagem cru
+    // (evita servir HTML de terceiro sob o nosso domínio) e sempre enviamos
+    // nosniff.
+    const tipoUpstream =
+      upstream.headers.get("content-type")?.toLowerCase() ?? "";
+    const tipoSeguro = tipoUpstream.startsWith("image/")
+      ? tipoUpstream
+      : "image/jpeg";
+
+    return new Response(upstream.body, {
+      headers: {
+        "Content-Type": tipoSeguro,
+        "X-Content-Type-Options": "nosniff",
+        // Fallback (miniatura borrada) expira rápido para o browser re-tentar.
+        "Cache-Control":
+          candidata.origem === "detalhe"
+            ? "public, max-age=300"
+            : "public, max-age=60",
+      },
+    });
+  }
+
+  return new Response("imagem indisponível", { status: 502 });
 }
