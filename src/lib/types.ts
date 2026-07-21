@@ -12,6 +12,15 @@ export interface Produto {
   imagemURL?: string;
   categoria?: string;
 
+  /**
+   * Id do produto PAI quando este item é uma variação (tamanho/decant) no
+   * Bling v3. Presente só em filhos de um produto formato "V"; ausente
+   * (undefined) em produtos simples. Campo OPCIONAL — a F4 usa para agrupar
+   * variações sob o pai com seletor de tamanho. Nunca 0 (a convenção "sem pai"
+   * do ERP é normalizada para undefined no ponto de transformação).
+   */
+  idProdutoPai?: number;
+
   // ─── Superfície editorial (§4/§9 de referencias-aesop.md) ────────────────
   // Os três campos abaixo são OPCIONAIS e, no caminho real (Bling), quase
   // sempre ausentes. Regra inegociável de degradação: **bloco sem dado não é

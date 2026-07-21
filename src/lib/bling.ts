@@ -53,6 +53,19 @@ interface RawProduto {
   imagemURL?: string;
   categoria?: string;
   /**
+   * Formato do produto no Bling v3: "S" simples, "V" variação (o produto PAI
+   * que agrupa tamanhos/decants) ou "E" com composição/kit. Campo opcional e
+   * lido defensivamente — a spec OpenAPI vence o client tipado (aprendizado
+   * registrado). Ausente no mock e em payloads antigos.
+   */
+  formato?: "S" | "V" | "E";
+  /**
+   * Id do produto PAI quando este item é um filho de uma variação. O ERP usa
+   * `0` para "sem pai" — tratado como ausência no ponto de transformação.
+   * Ausente no mock e em payloads antigos.
+   */
+  idProdutoPai?: number;
+  /**
    * Campos EDITORIAIS — existem só no mock (`src/lib/mock-produtos.ts`).
    * A API do Bling não tem equivalente: a listagem devolve apenas
    * `id, idProdutoPai, nome, codigo, preco, precoCusto, estoque, tipo,
@@ -108,6 +121,11 @@ function tratar(raw: RawProduto): Produto {
     consultar: precoValido ? undefined : true,
     imagemURL,
     categoria: raw.categoria,
+    // `0`/ausente = sem pai → undefined; só id positivo é uma variação.
+    idProdutoPai:
+      typeof raw.idProdutoPai === "number" && raw.idProdutoPai > 0
+        ? raw.idProdutoPai
+        : undefined,
     // Repasse dos campos editoriais. Vindos do Bling são sempre `undefined`
     // (a API não os tem), então o card/PDP simplesmente não renderiza as
     // linhas correspondentes — é a degradação honesta em ação.
@@ -116,8 +134,29 @@ function tratar(raw: RawProduto): Produto {
   };
 }
 
+/**
+ * Ponto ÚNICO de transformação da listagem (mock e Bling passam por aqui).
+ *
+ * Tolerância a variações (Bling v3, produto pai formato "V" + filhos com
+ * `idProdutoPai`): o produto PAI só é ocultado quando existe, NA MESMA
+ * listagem, ao menos um filho VISÍVEL apontando para ele — senão o pai é
+ * mantido (aparece "Sob consulta", comportamento existente). Os filhos são os
+ * SKUs vendáveis e ficam sempre visíveis. Payload sem `formato`/`idProdutoPai`
+ * (mock, catálogo atual) → no-op comprovado por teste.
+ */
 function tratarLista(raws: RawProduto[]): Produto[] {
-  return raws.filter(utilizavel).map(tratar);
+  const uteis = raws.filter(utilizavel);
+
+  // Ids que são pai de ao menos um filho visível nesta listagem.
+  const paisComFilhoVisivel = new Set<number>();
+  for (const r of uteis) {
+    const pai = r.idProdutoPai;
+    if (typeof pai === "number" && pai > 0) paisComFilhoVisivel.add(pai);
+  }
+
+  return uteis
+    .filter((r) => !(r.formato === "V" && paisComFilhoVisivel.has(r.id)))
+    .map(tratar);
 }
 
 function mockResponse(): ProdutosResponse {
@@ -144,7 +183,10 @@ export async function getProdutos({
 
   try {
     const token = await auth.getAccessToken();
-    const acumulado: Produto[] = [];
+    // Acumulamos os itens BRUTOS de todas as páginas e transformamos UMA vez no
+    // fim: assim a filtragem pai/filho enxerga a listagem inteira, mesmo quando
+    // pai e filho caem em páginas diferentes.
+    const rawsAcumulados: RawProduto[] = [];
 
     for (let pagina = 1; pagina <= MAX_PAGES; pagina++) {
       // Throttle entre páginas (não antes da primeira).
@@ -172,14 +214,15 @@ export async function getProdutos({
       const itens = json.data ?? [];
       if (itens.length === 0) break;
 
-      acumulado.push(...tratarLista(itens));
+      rawsAcumulados.push(...itens);
 
       // Última página quando vieram menos itens que o limite.
       if (itens.length < PAGE_LIMIT) break;
     }
 
-    if (acumulado.length === 0) return mockResponse();
-    return { fonte: "bling", produtos: acumulado };
+    const produtos = tratarLista(rawsAcumulados);
+    if (produtos.length === 0) return mockResponse();
+    return { fonte: "bling", produtos };
   } catch (err) {
     console.error(
       "[bling] falha ao buscar produtos — fallback para mock:",
