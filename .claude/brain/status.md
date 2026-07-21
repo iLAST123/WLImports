@@ -1,5 +1,30 @@
 # Status — WLimports
 
+## 2026-07-21 — Missão 8: plano e-commerce em fases APROVADO — F1 em execução
+
+O dono aprovou o plano de transformação em e-commerce (7 fases, auditoria
+brief × estado real e decisões de arquitetura em `decisoes/DEC-006`).
+Decisões ratificadas por ele: decants = **variações no Bling** (fonte
+comercial) com enriquecimento JSON só editorial; **checkout simulado
+aposentado** → "Revisão do pedido → WhatsApp"; F2 ganha rastreamento
+obrigatório (Meta Pixel/CAPI + GA4, UTMs persistidas anexadas à mensagem,
+código de pedido `#WL-XXXX`).
+
+**F1 em execução** (fundação indexável): catálogo server-rendered,
+`/produto/[slug]-[id]` + redirect permanente, JSON-LD Product, sitemap +
+robots, canonical. Invariantes: zero chamada nova ao Bling; páginas com dado
+do Bling nunca congelam mock de build; ler `node_modules/next/dist/docs`
+antes de mexer em rendering/cache (Next 16: `use cache`/`cacheLife`, exports
+deprecados).
+
+### Pendências de insumo do dono (para as próximas fases)
+1. **Número real do WhatsApp Business** — veio placeholder; F2 implementa via
+   env (`NEXT_PUBLIC_WHATSAPP_NUMBER`), ativação bloqueada até o número real.
+2. Cadastro das variações (5ml/10ml/frasco) dos ~20 SKUs prioritários no
+   Bling — em paralelo à F1, pelo dono.
+3. Valor mínimo do frete grátis (F2), preço de entrada dos decants para o
+   hero (F7), depoimentos (F6-A).
+
 ## 2026-07-21 — Missão 7: redesign "superfície clara" estilo Aesop + PLP dedicada
 
 Base: pesquisa de campo com computed styles reais da aesop.com
