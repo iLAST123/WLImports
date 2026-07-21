@@ -57,3 +57,27 @@
 ## Framer Motion: `viewport.amount` > 0 em containers mais altos que o viewport nunca dispara (2026-07-19)
 
 O grid do catálogo usava `whileInView` com `viewport={{ amount: 0.1 }}` no container inteiro. Com o mock (12 itens) o grid era baixo e 10% dele cabia na tela — funcionava. Com o catálogo real (128 itens, ~24.000px de altura), 10% nunca cabe no viewport → o IntersectionObserver nunca dispara → todos os cards ficam presos em `opacity: 0` ("catálogo todo preto", reportado pelo dono). Fix: `amount: 0` no container de listas de altura variável; reservar `amount` fracionário para elementos menores que a tela. Regra: qualquer `whileInView` num elemento cuja altura depende de dados precisa funcionar no pior caso de altura.
+
+## ioredis em serverless: `enableOfflineQueue: false` quebra o 1º comando (2026-07-21)
+
+O `RedisTokenStore` criava o cliente e chamava `get()`/`set()` imediatamente. Com
+`enableOfflineQueue: false`, comandos emitidos antes do handshake TCP/TLS terminar
+falham na hora em vez de aguardar a conexão. Sintoma em produção: `load()` sempre
+logava "não foi possível ler tokens do Redis" e — pior — o `save()` após uma
+renovação bem-sucedida também falhava, então o refresh token ROTACIONADO se perdia.
+Resultado: o 1º request funcionava (consumindo a semente da env) e todos os
+seguintes caíam para mock, com a semente já inválida. Fix: `lazyConnect: true` +
+`await client.connect()` explícito antes de qualquer comando.
+
+Pista diagnóstica que resolveu o caso: a mensagem "não foi possível persistir
+tokens no Redis" só é logada DEPOIS de um refresh bem-sucedido (`save()` só roda
+no caminho feliz) — vê-la nos logs provou que o token tinha sido renovado e perdido,
+e não que as credenciais estavam erradas.
+
+## Vercel: env var nova só vale em deployment criado DEPOIS dela (2026-07-21)
+
+O "Redeploy" pelo painel e o auto-deploy do GitHub não estavam produzindo um
+deployment que enxergasse a `BLING_REFRESH_TOKEN` recém-criada — produção seguia
+servindo um build anterior à variável e caía no mock. `vercel deploy --prod` pela
+CLI resolveu na hora. Ao alterar env var em produção, SEMPRE criar deployment novo
+pela CLI e validar com um request real, nunca confiar no botão.
