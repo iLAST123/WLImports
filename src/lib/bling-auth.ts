@@ -188,15 +188,22 @@ export type RedisFactory = (url: string) => Promise<RedisLike>;
 // própria connection string.
 const defaultRedisFactory: RedisFactory = async (url) => {
   const mod = (await import("ioredis")) as unknown as {
-    default: new (url: string, opts?: unknown) => RedisLike;
+    default: new (
+      url: string,
+      opts?: unknown,
+    ) => RedisLike & { connect(): Promise<void> };
   };
   const Redis = mod.default;
-  return new Redis(url, {
-    connectTimeout: 5_000,
+  const client = new Redis(url, {
+    // `lazyConnect` + `connect()` explícito: garante que a conexão está PRONTA
+    // antes do primeiro comando. Sem isso, o get/set sai antes do handshake e
+    // falha (foi o bug que fez o token rotacionado se perder em produção).
+    lazyConnect: true,
+    connectTimeout: 10_000,
     maxRetriesPerRequest: 2,
-    // Serverless: não queremos retries infinitos segurando a lambda.
-    enableOfflineQueue: false,
   });
+  await client.connect();
+  return client;
 };
 
 /**
