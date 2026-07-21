@@ -53,7 +53,11 @@ zero erros. Orçamento de rate limit do Bling **inalterado por construção**
 4. IDs de rastreamento p/ F2: Meta Pixel ID (+ token CAPI, se já houver) e
    GA4 Measurement ID.
 
-**F2 NÃO iniciada — aguarda ordem do dono.**
+**F2 ADIADA por ordem do dono (2026-07-21, "pule pra F3 e F4") — NÃO
+cancelada.** O escopo ratificado dela permanece para quando voltar: checkout →
+"Revisão do pedido → WhatsApp" + rastreamento obrigatório (Pixel/CAPI, GA4,
+UTMs, `#WL-XXXX`) + os insumos listados acima. **Em execução: F3
+(enriquecimento) e, na sequência, F4 (PDP rica).**
 
 ## 2026-07-21 — Missão 7: redesign "superfície clara" estilo Aesop + PLP dedicada
 
