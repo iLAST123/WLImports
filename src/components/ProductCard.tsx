@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { separarVolume } from "@/lib/produto-formato";
+import { caminhoProduto } from "@/lib/urls";
 import type { Produto } from "@/lib/types";
 
 /**
@@ -45,7 +46,7 @@ export default function ProductCard({ produto }: { produto: Produto }) {
 
   return (
     <Link
-      href={`/produto/${produto.id}`}
+      href={caminhoProduto(produto.nome, produto.id)}
       // Sem aria-label: o nome acessível vem do conteúdo (nome → notas →
       // volume → preço), mais informativo que um rótulo genérico.
       className="group flex h-full flex-col outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"

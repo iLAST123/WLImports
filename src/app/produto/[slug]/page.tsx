@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
+import { connection } from "next/server";
 import { getProdutoDetalhe } from "@/lib/bling";
 import { separarVolume } from "@/lib/produto-formato";
+import { SITE_URL, caminhoProduto, urlProduto } from "@/lib/urls";
+import { extrairIdDeSlug, montarSlugProduto } from "@/lib/slug";
 import Footer from "@/components/sections/Footer";
 import SuperficieLoja from "@/components/loja/SuperficieLoja";
 import Galeria from "@/components/produto/Galeria";
@@ -10,20 +13,14 @@ import BlocoCompra from "@/components/produto/BlocoCompra";
 import Acordeao, { type SecaoAcordeao } from "@/components/produto/Acordeao";
 import { precoDoProduto } from "@/components/produto/preco";
 
-// Dinâmica DE PROPÓSITO — mesmo motivo documentado em
-// `src/app/api/produtos/route.ts`: prerenderizar congelaria o caminho mock de
-// um build sem credenciais, mesmo com as env vars presentes em runtime. O
-// cache real vive no fetch do Bling (`next: { revalidate }` em lib/bling.ts).
-export const dynamic = "force-dynamic";
+// Renderização DINÂMICA por request via `connection()` (idioma do Next 16 que
+// substitui `unstable_noStore`; sem a flag `cacheComponents`, é o preferido ao
+// `export const dynamic = "force-dynamic"`, hoje deprecado). Sem isso, um build
+// com env vazias congelaria o caminho mock no HTML. O cache real de dados vive
+// no fetch do Bling (`next: { revalidate: 600 }` em lib/bling.ts) — zero
+// chamada nova ao Bling por request.
 
-type Params = { params: Promise<{ id: string }> };
-
-/** Aceita só id inteiro positivo; qualquer outra coisa é 404, não erro 500. */
-function parseId(bruto: string): number | null {
-  const id = Number(bruto);
-  if (!bruto.trim() || !Number.isInteger(id) || id <= 0) return null;
-  return id;
-}
+type Params = { params: Promise<{ slug: string }> };
 
 function truncar(texto: string, limite = 155): string {
   const limpo = texto.replace(/\s+/g, " ").trim();
@@ -32,8 +29,8 @@ function truncar(texto: string, limite = 155): string {
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { id: bruto } = await params;
-  const id = parseId(bruto);
+  const { slug } = await params;
+  const id = extrairIdDeSlug(slug);
   if (id === null) return { title: "Produto não encontrado — WLimports" };
 
   const { produto } = await getProdutoDetalhe(id);
@@ -45,12 +42,19 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       `${produto.nome} na curadoria WLimports: perfume importado original, com autenticidade garantida e envio seguro.`,
   );
 
+  // Canonical SEMPRE aponta ao slug canônico, independente do param recebido
+  // (id legado ou slug desatualizado consolidam neste endereço). Absoluto via
+  // SITE_URL; `metadataBase` (layout) cobre o OG relativo.
+  const canonical = urlProduto(produto.nome, id);
+
   return {
     title: `${produto.nome} — WLimports`,
     description: descricao,
+    alternates: { canonical },
     openGraph: {
       title: `${produto.nome} — WLimports`,
       description: descricao,
+      url: canonical,
       type: "website",
       images: produto.imagens.length > 0 ? [produto.imagens[0]] : undefined,
     },
@@ -75,18 +79,55 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  * de texto de enchimento.
  */
 export default async function PaginaProduto({ params }: Params) {
-  const { id: bruto } = await params;
-  const id = parseId(bruto);
+  await connection();
+
+  const { slug } = await params;
+  const id = extrairIdDeSlug(slug);
   if (id === null) notFound();
 
   const { produto } = await getProdutoDetalhe(id);
   if (!produto) notFound();
+
+  // Consolidação de URL: se o param recebido não é o slug canônico — cobre o
+  // legado só-dígitos (`/produto/123`) E o slug desatualizado por rename no ERP
+  // — redireciona PERMANENTEMENTE (308) para a URL canônica. `notFound`/
+  // `permanentRedirect` lançam, então ficam antes de qualquer render.
+  const slugCanonico = montarSlugProduto(produto.nome, id);
+  if (slug !== slugCanonico) {
+    permanentRedirect(caminhoProduto(produto.nome, id));
+  }
+
+  // ── JSON-LD Product (SEO). Imagens em URL ABSOLUTA (proxy `/api/imagem` via
+  // SITE_URL). `offers` só quando há preço válido — "Sob consulta" fica SEM
+  // offers, jamais preço 0. Sem brand/rating/review inventados. Nome vem do
+  // ERP (não confiável) → escape de `<` no serialize.
+  const canonical = urlProduto(produto.nome, id);
 
   // Volume não é campo do ERP: ele já vive dentro do nome ("… 100ml") e é só
   // SEPARADO (produto-formato.ts). Quando a extração não tem confiança, o nome
   // volta intacto e `volume` é undefined — e a linha some.
   const { nome, volume } = separarVolume(produto.nome);
   const { semPreco, texto: preco } = precoDoProduto(produto);
+
+  const jsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: produto.nome,
+    url: canonical,
+  };
+  if (produto.imagens.length > 0) {
+    jsonLd.image = produto.imagens.map((src) => `${SITE_URL}${src}`);
+  }
+  if (produto.descricao) jsonLd.description = produto.descricao;
+  if (!semPreco && typeof produto.preco === "number") {
+    jsonLd.offers = {
+      "@type": "Offer",
+      priceCurrency: "BRL",
+      price: produto.preco,
+      availability: "https://schema.org/InStock",
+      url: canonical,
+    };
+  }
 
   // Descrição rica quando existe; senão a curta; senão nada.
   const paragrafos = (produto.descricao ?? produto.descricaoCurta ?? "")
@@ -105,6 +146,12 @@ export default async function PaginaProduto({ params }: Params) {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       <SuperficieLoja className="px-6 pb-24 pt-28 sm:pt-32">
         <div className="mx-auto w-full max-w-5xl">
           <nav aria-label="Você está em" className="mb-10 sm:mb-14">

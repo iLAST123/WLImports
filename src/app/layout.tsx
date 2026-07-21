@@ -5,6 +5,7 @@ import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
 import SiteHeader from "@/components/SiteHeader";
 import { CarrinhoProvider } from "@/lib/carrinho";
+import { SITE_URL } from "@/lib/urls";
 
 const bodoni = Bodoni_Moda({
   variable: "--font-serif",
@@ -22,6 +23,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
+  // Base absoluta para resolver `alternates.canonical` e imagens OG relativas
+  // das telas filhas (Next 16 exige uma URL, não string).
+  metadataBase: new URL(SITE_URL),
   title: "WLimports — Perfumes Importados",
   description:
     "Curadoria de perfumes importados originais e decants de nicho. Exclusividade, autenticidade garantida e envio seguro — a WLimports leva a alta perfumaria até você.",
