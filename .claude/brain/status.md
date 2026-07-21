@@ -1,6 +1,6 @@
 # Status — WLimports
 
-## 2026-07-21 — Missão 8: plano e-commerce em fases APROVADO — F1 em execução
+## 2026-07-21 — Missão 8: plano aprovado (DEC-006) + F1 "fundação indexável" CONCLUÍDA e NO AR
 
 O dono aprovou o plano de transformação em e-commerce (7 fases, auditoria
 brief × estado real e decisões de arquitetura em `decisoes/DEC-006`).
@@ -10,20 +10,50 @@ aposentado** → "Revisão do pedido → WhatsApp"; F2 ganha rastreamento
 obrigatório (Meta Pixel/CAPI + GA4, UTMs persistidas anexadas à mensagem,
 código de pedido `#WL-XXXX`).
 
-**F1 em execução** (fundação indexável): catálogo server-rendered,
-`/produto/[slug]-[id]` + redirect permanente, JSON-LD Product, sitemap +
-robots, canonical. Invariantes: zero chamada nova ao Bling; páginas com dado
-do Bling nunca congelam mock de build; ler `node_modules/next/dist/docs`
-antes de mexer em rendering/cache (Next 16: `use cache`/`cacheLife`, exports
-deprecados).
+**F1 executada e publicada no mesmo dia** (6 commits `6bb6f92..a68f440`,
+auto-deploy GitHub):
+- Fundação de slug (`src/lib/slug.ts`) e URL única (`src/lib/urls.ts`,
+  `SITE_URL` com fallback do domínio Vercel; setar `NEXT_PUBLIC_SITE_URL`
+  quando houver domínio próprio).
+- Tolerância a variações pai/filho na listagem do Bling (pai "V" só some
+  quando há filho visível; `idProdutoPai` exposto p/ F4) — blinda o catálogo
+  enquanto o dono cadastra as variações.
+- `/catalogo` **server-rendered** via `connection()` (Next 16): o HTML do
+  servidor traz os 128 produtos; "Carregando catálogo…" morreu.
+- Rota canônica `/produto/[slug]-[id]`; legado `/produto/[id]` e slug
+  desatualizado → **308** permanente (equivalente a 301 p/ SEO — ver
+  aprendizados); canonical + JSON-LD Product (offers só com preço válido,
+  nunca em "Sob consulta").
+- `sitemap.xml` (130 URLs: home + catálogo + 128 produtos) e `robots.txt`
+  (disallow `/api/` e `/checkout`).
 
-### Pendências de insumo do dono (para as próximas fases)
+**DoD carimbado em produção (curl, 2026-07-21 ~17h BRT):** `/catalogo` com 0
+"Carregando" e 128 links de produto no HTML cru · `/produto/16678961877` →
+308 → `/produto/kit-body-butterlly-16678961877` (200, JSON-LD com
+`price: 260` BRL) · sitemap 130 locs · robots OK · `/api/produtos` intacto
+(`fonte:"bling"`). Gates locais: tsc/lint limpos, **124 testes** verdes (eram
+97), build OK. QA funcional em browser (Playwright, 390/1440): PASS em
+busca/ordenação/chips, PDP, redirects, sacola+persistência, home, console
+zero erros. Orçamento de rate limit do Bling **inalterado por construção**
+(SSR/sitemap reusam o Data Cache 600s de `getProdutos()`).
+
+### O que o dono valida manualmente em produção (F1)
+1. Navegar catálogo → produto → sacola no celular com as URLs novas.
+2. Colar uma URL de produto (`/produto/<slug>-<id>`) num anúncio de teste.
+3. Google Search Console: submeter `sitemap.xml` e pedir indexação (ação do
+   dono; acelera o efeito SEO da F1).
+
+### Pendências para a F2 (bloqueios de insumo do dono)
 1. **Número real do WhatsApp Business** — veio placeholder; F2 implementa via
    env (`NEXT_PUBLIC_WHATSAPP_NUMBER`), ativação bloqueada até o número real.
 2. Cadastro das variações (5ml/10ml/frasco) dos ~20 SKUs prioritários no
-   Bling — em paralelo à F1, pelo dono.
+   Bling — em paralelo, pelo dono.
 3. Valor mínimo do frete grátis (F2), preço de entrada dos decants para o
    hero (F7), depoimentos (F6-A).
+4. IDs de rastreamento p/ F2: Meta Pixel ID (+ token CAPI, se já houver) e
+   GA4 Measurement ID.
+
+**F2 NÃO iniciada — aguarda ordem do dono.**
 
 ## 2026-07-21 — Missão 7: redesign "superfície clara" estilo Aesop + PLP dedicada
 

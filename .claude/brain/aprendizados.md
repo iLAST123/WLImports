@@ -1,5 +1,40 @@
 # Aprendizados — WLimports
 
+## Next 16: `connection()` é o idioma para render dinâmica; sitemap é cacheado por padrão (2026-07-21, F1)
+
+Sem a flag `cacheComponents`, o jeito recomendado pela doc local
+(`node_modules/next/dist/docs`) de forçar renderização por request é
+`await connection()` (`next/server`) — substitui `unstable_noStore` e o
+`export const dynamic = "force-dynamic"` (deprecado; a PDP usava e foi
+migrada). CRÍTICO neste projeto: página/rota que consome `getProdutos()` e
+fica ESTÁTICA congela o MOCK do build de env vazias no HTML de produção.
+`sitemap.ts` é cacheado por padrão e precisa do mesmo `connection()`;
+`robots.ts` pode ficar estático. O custo por request é só o Data Cache 600s —
+zero chamada nova ao Bling.
+
+## `permanentRedirect()` do Next emite 308, não 301 (2026-07-21, F1)
+
+O redirect permanente do App Router (`permanentRedirect`) responde **308
+Permanent Redirect**. Para SEO é equivalente ao 301 (Google trata ambos como
+permanentes; 308 ainda preserva o método HTTP). Registrado porque o plano da
+F1 falava "301" e a produção responde 308 — é o comportamento correto, não um
+bug. Em uso: `/produto/<id-legado>` e slug desatualizado → 308 para
+`/produto/<slug>-<id>` canônico.
+
+## Renomear segmento dinâmico deixa `validator.ts` fantasma no `.next` (2026-07-21, F1)
+
+Ao renomear `src/app/produto/[id]` → `[slug]`, o `.next` antigo mantém um
+`validator.ts` gerado apontando para o segmento que não existe mais e o
+`tsc`/build falham com erro confuso. Fix: `rm -rf .next` antes do build
+(mesma família do lock fantasma do swc).
+
+## Playwright + `whileInView`: clique abaixo do fold exige scroll antes (2026-07-21, F1)
+
+Elementos revelados por `whileInView` (Framer Motion) abaixo do fold falham
+clique de forma intermitente em teste automatizado se não houver
+`scrollIntoViewIfNeeded()` antes. Complementa o gotcha "screenshot fullPage
+vs whileInView".
+
 ## `@next/swc-darwin-arm64` oco derruba o `next build` local (Turbopack/WASM) (2026-07-21)
 
 `node_modules/@next/swc-darwin-arm64` pode ficar **oco** — só `package.json`/
