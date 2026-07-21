@@ -4,7 +4,10 @@ import { getImagemProduto, invalidarImagemGrande } from "@/lib/bling";
 // Rota dinâmica (usa searchParams) — o cache fica no `Cache-Control` da
 // resposta, não em revalidate de rota.
 
-// Proxy de imagem: `GET /api/imagem?id=123`.
+// Proxy de imagem: `GET /api/imagem?id=123[&i=0]`.
+//
+// `i` (opcional, inteiro >= 0) seleciona a imagem da GALERIA do produto —
+// `i=0` (ou ausente) é a principal, exatamente o comportamento anterior.
 //
 // Design SSRF-safe: o client passa SOMENTE o id numérico. NUNCA aceitamos uma
 // URL arbitrária por query — as URLs assinadas da AWS são resolvidas no
@@ -23,7 +26,16 @@ export async function GET(req: NextRequest) {
     return new Response("id inválido", { status: 400 });
   }
 
-  const { grande, miniatura } = await getImagemProduto(id);
+  // Índice da galeria: ausente = principal. Inválido → 404 (não existe essa
+  // imagem), na mesma classe de resposta de um índice fora do range.
+  const iParam = req.nextUrl.searchParams.get("i");
+  // `Number("")` é 0 — string vazia é entrada inválida, não a principal.
+  const indice = iParam === null ? 0 : Number(iParam.trim() || NaN);
+  if (!Number.isInteger(indice) || indice < 0) {
+    return new Response("imagem não encontrada", { status: 404 });
+  }
+
+  const { grande, miniatura } = await getImagemProduto(id, {}, indice);
 
   const candidatas: { url: string; origem: "detalhe" | "listagem" }[] = [];
   if (grande) candidatas.push({ url: grande, origem: "detalhe" });

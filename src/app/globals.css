@@ -17,6 +17,10 @@
   --gold: #c6a15b; /* dourado antigo — acento primário, CTAs, hairlines */
   --champagne: #e4d3ac; /* champanhe claro — acento secundário, hover, gradiente */
   --border: #2c2420; /* hairline quente sobre o preto (não usar para texto) */
+
+  /* ---- Motion & elevação — canônicos da marca (T-A3) ---- */
+  --ease-lux-cubic: cubic-bezier(0.22, 1, 0.36, 1); /* já usado em JS/framer-motion no Hero; espelhado aqui pra CSS puro (ex.: transition-timing-function em componentes sem JS) */
+  --shadow-lux-color: 0 20px 60px -20px rgba(198, 161, 91, 0.25), 0 8px 24px -12px rgba(0, 0, 0, 0.65); /* sombra quente p/ elementos elevados sobre o preto — buy box sticky, cards de PDP/checkout */
 }
 
 @theme inline {
@@ -38,6 +42,22 @@
    */
   --font-serif: var(--font-serif), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
+
+  /*
+   * --ease-lux → gera a utility `ease-lux` (transition-timing-function).
+   * Mesma curva do EASE=[0.22,1,0.36,1] já usado via framer-motion no Hero —
+   * usar aqui pra qualquer transição CSS pura (hover de card, sticky buy box)
+   * ficar coerente com o que os componentes animados em JS já fazem.
+   */
+  --ease-lux: var(--ease-lux-cubic);
+
+  /*
+   * --shadow-lux → gera a utility `shadow-lux`. Sombra quente (não preta pura)
+   * pra elementos elevados sobre o fundo #0E0A08 — sticky buy box da PDP,
+   * resumo sticky do checkout, cards de produto em hover. Evita o "flutuando
+   * no vazio" de uma sombra cinza neutra sobre preto quente.
+   */
+  --shadow-lux: var(--shadow-lux-color);
 }
 
 /* Fallback nativo quando o Lenis está desligado — mas nunca sob
@@ -67,6 +87,23 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/*
+ * Grão do hero (T-A3 — "fator UAU", item 3 da spec de motion).
+ * Uso: <div aria-hidden className="grain-lux absolute inset-0" /> por cima do
+ * vídeo/poster, abaixo do conteúdo (z-index menor que o texto). Textura
+ * ESTÁTICA (sem @keyframes) — não precisa de fallback prefers-reduced-motion
+ * porque não há movimento, só granulação cinematográfica no frame parado.
+ * A vinheta de contraste (escurecer as bordas) já existe como gradiente no
+ * Hero.tsx (bg-gradient-to-b) — não duplicada aqui (Tailwind já resolve).
+ * Não aplicar sobre texto puro — só sobre a camada de vídeo/imagem.
+ */
+.grain-lux {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 120px 120px;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
 }
 
 /*

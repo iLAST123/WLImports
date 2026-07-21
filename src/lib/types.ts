@@ -17,3 +17,20 @@ export interface ProdutosResponse {
   fonte: "bling" | "mock";
   produtos: Produto[];
 }
+
+/** Produto da página de detalhe: listagem + descrição rica + galeria. */
+export interface ProdutoDetalhe extends Produto {
+  /** Descrição rica em TEXTO PURO (HTML já removido no servidor). */
+  descricao?: string;
+  /**
+   * URLs do proxy, já prontas para `<img src>`: ["/api/imagem?id=1&i=0", ...].
+   * Sempre >= 1 item quando há imagem; [] quando não há nenhuma.
+   */
+  imagens: string[];
+}
+
+export interface ProdutoDetalheResponse {
+  fonte: "bling" | "mock";
+  /** `null` = id inexistente no catálogo. */
+  produto: ProdutoDetalhe | null;
+}

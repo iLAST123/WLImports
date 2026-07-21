@@ -3,6 +3,8 @@ import { Bodoni_Moda, Manrope } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
+import SiteHeader from "@/components/SiteHeader";
+import { CarrinhoProvider } from "@/lib/carrinho";
 
 const bodoni = Bodoni_Moda({
   variable: "--font-serif",
@@ -37,7 +39,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <MotionConfig reducedMotion="user">
-          <SmoothScroll>{children}</SmoothScroll>
+          <CarrinhoProvider>
+            <SmoothScroll>
+              <SiteHeader />
+              {children}
+            </SmoothScroll>
+          </CarrinhoProvider>
         </MotionConfig>
       </body>
     </html>
